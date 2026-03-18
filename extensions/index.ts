@@ -690,7 +690,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 				? `router:${selectedProfile}${pinLabel} -> idle`
 				: `router:off (${selectedProfile}${pinLabel}) -> ${formatModelRef(lastNonRouterModel)}`;
 		}
-		ctx.ui.setStatus("router", statusText);
+		ctx.ui.setStatus("router", ctx.ui.theme.fg("dim", statusText));
 
 		if (!widgetEnabled) {
 			ctx.ui.setWidget("router", undefined);
@@ -713,7 +713,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 		if (Object.keys(pinnedTierByProfile).length > 1) {
 			widgetLines.push(`Pins: ${formatPinSummary()}`);
 		}
-		ctx.ui.setWidget("router", widgetLines);
+		ctx.ui.setWidget("router", widgetLines.map((line) => ctx.ui.theme.fg("dim", line)));
 	};
 
 	const registerRouterProvider = () => {
