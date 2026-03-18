@@ -419,4 +419,6 @@ No attempt to perfectly replicate vendor-specific internals.
   - `pi -e ./extensions/index.ts --list-models router` still shows `router/auto` after the latest UI/command changes
   - relaunch/resume test now restores router execution correctly when the previous active model was `router/auto`
 - Initialized a git repository for the package and committed the current state.
+- Fixed an issue where the status line and extension internal state got out of sync with pi's underlying core model when manually changing profiles via commands (e.g. `/router-profile`) or pinning tiers (`/router-pin`). Status lines now reflect changes instantly before the next turn executes.
+- Fixed a race condition on relaunch/resume where the extension was mistakenly disabled and reverted to the default profile when pi automatically fell back to a default non-router model before the extension was fully initialized. The extension now correctly distinguishes between system fallback switches and explicit manual mid-session model switches.
 - Next step: explore optional classifier support and any additional routing controls now that manual override, widgets, and debugging are in place.

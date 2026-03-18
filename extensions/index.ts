@@ -569,6 +569,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 	let lastNonRouterModel: string | undefined;
 	let lastConfigWarnings: string[] = [];
 	let lastPersistedSnapshot: string | undefined;
+	let isInitialized = false;
 
 	const getProfileCompletions = (prefix: string) => {
 		const items = profileNames(currentConfig)
@@ -672,23 +673,26 @@ export default function routerExtension(pi: ExtensionAPI) {
 	};
 
 	const updateStatus = (ctx: ExtensionContext) => {
-		const activeModel = ctx.model;
-		const activeRouterProfile = activeModel?.provider === "router" ? activeModel.id : undefined;
-		const statusProfile = activeRouterProfile ?? selectedProfile;
+		const activeRouterProfile = routerEnabled ? selectedProfile : undefined;
+		const statusProfile = selectedProfile;
 		const activePin = getPinnedTierForProfile(statusProfile);
 		const pinLabel = activePin ? ` [pin:${activePin}]` : "";
 
 		let statusText: string;
 		if (activeRouterProfile) {
-			if (lastDecision && lastDecision.profile === activeRouterProfile) {
+			// If we have a pin, or if we switched profiles, show "waiting" until the next turn.
+			// Only show the last decision if it was for the current profile AND the tier
+			// matches any newly applied pin.
+			const matchesProfile = lastDecision && lastDecision.profile === activeRouterProfile;
+			const matchesPin = activePin ? lastDecision?.tier === activePin : true;
+
+			if (lastDecision && matchesProfile && matchesPin) {
 				statusText = `router:${activeRouterProfile}${pinLabel} -> ${lastDecision.tier} -> ${lastDecision.targetProvider}/${lastDecision.targetModelId}`;
 			} else {
 				statusText = `router:${activeRouterProfile}${pinLabel} -> waiting`;
 			}
 		} else {
-			statusText = routerEnabled
-				? `router:${selectedProfile}${pinLabel} -> idle`
-				: `router:off (${selectedProfile}${pinLabel}) -> ${formatModelRef(lastNonRouterModel)}`;
+			statusText = `router:off (${selectedProfile}${pinLabel}) -> ${formatModelRef(lastNonRouterModel)}`;
 		}
 		ctx.ui.setStatus("router", ctx.ui.theme.fg("dim", statusText));
 
@@ -822,14 +826,14 @@ export default function routerExtension(pi: ExtensionAPI) {
 		}
 
 		const fallbackProfile = resolveProfileName(currentConfig, selectedProfile);
-		const fallbackModel = ctx.modelRegistry.find("router", fallbackProfile);
+		const routerModel = ctx.modelRegistry.find("router", fallbackProfile);
 		selectedProfile = fallbackProfile;
-		if (!fallbackModel) {
+		if (!routerModel) {
 			ctx.ui.notify(`Router profile \"${ctx.model.id}\" is no longer configured.`, "warning");
 			return;
 		}
 
-		await pi.setModel(fallbackModel);
+		await pi.setModel(routerModel);
 		ctx.ui.notify(
 			`Router profile \"${ctx.model.id}\" is no longer configured. Switched to router/${fallbackProfile}.`,
 			"warning",
@@ -1082,7 +1086,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 		description: "Pin routing for the current profile or a named profile",
 		getArgumentCompletions: getRouterPinArgumentCompletions,
 		handler: async (args, ctx) => {
-			const currentProfile = ctx.model?.provider === "router" ? ctx.model.id : selectedProfile;
+			const currentProfile = selectedProfile;
 			const trimmed = args?.trim();
 			if (!trimmed) {
 				ctx.ui.notify(
@@ -1154,6 +1158,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		isInitialized = true;
 		await restoreStateFromSession(ctx);
 		notifyConfigWarnings(ctx);
 		if (debugEnabled) {
@@ -1162,12 +1167,21 @@ export default function routerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("model_select", async (event, ctx) => {
+		if (!isInitialized) {
+			return;
+		}
 		if (event.model.provider === "router") {
 			routerEnabled = true;
 			selectedProfile = resolveProfileName(currentConfig, event.model.id);
 		} else {
-			routerEnabled = false;
-			lastNonRouterModel = `${event.model.provider}/${event.model.id}`;
+			// Disable the router only if this is a manual switch mid-session.
+			// System switches (like to the default model during /new) typically
+			// happen when the branch history is empty.
+			const branchSize = ctx.sessionManager.getBranch().length;
+			if (branchSize > 0) {
+				routerEnabled = false;
+				lastNonRouterModel = `${event.model.provider}/${event.model.id}`;
+			}
 		}
 		persistState();
 		updateStatus(ctx);
