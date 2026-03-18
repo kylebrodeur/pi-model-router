@@ -19,6 +19,8 @@ type RouterTier = "high" | "medium" | "low";
 type RouterPin = RouterTier | "auto";
 type RouterPhase = "planning" | "implementation" | "lightweight";
 type RouterPinByProfile = Partial<Record<string, RouterTier>>;
+type RouterThinkingByTier = Partial<Record<RouterTier, ThinkingLevel>>;
+type RouterThinkingByProfile = Record<string, RouterThinkingByTier>;
 
 interface RoutedTierConfig {
 	model: string;
@@ -54,6 +56,7 @@ interface RouterPersistedState {
 	selectedProfile: string;
 	pinTier?: RouterTier;
 	pinByProfile?: RouterPinByProfile;
+	thinkingByProfile?: RouterThinkingByProfile;
 	debugEnabled?: boolean;
 	widgetEnabled?: boolean;
 	debugHistory?: RoutingDecision[];
@@ -323,6 +326,20 @@ function isRouterPinByProfile(value: unknown): value is RouterPinByProfile {
 	return Object.values(value).every((tier) => isRouterTier(tier));
 }
 
+function isRouterThinkingByTier(value: unknown): value is RouterThinkingByTier {
+	if (!isObjectRecord(value)) {
+		return false;
+	}
+	return Object.values(value).every((level) => isThinkingLevel(level));
+}
+
+function isRouterThinkingByProfile(value: unknown): value is RouterThinkingByProfile {
+	if (!isObjectRecord(value)) {
+		return false;
+	}
+	return Object.values(value).every((tierMap) => isRouterThinkingByTier(tierMap));
+}
+
 function isRouterPin(value: unknown): value is RouterPin {
 	return typeof value === "string" && ROUTER_PIN_VALUES.includes(value as RouterPin);
 }
@@ -339,6 +356,7 @@ function decideRouting(
 	profile: RouterProfile,
 	previousDecision: RoutingDecision | undefined,
 	pinnedTier?: RouterTier,
+	thinkingOverrides?: RouterThinkingByTier,
 ): RoutingDecision {
 	const prompt = getLastUserText(context).toLowerCase();
 	const recentConversation = getRecentConversationText(context);
@@ -477,6 +495,9 @@ function decideRouting(
 
 	const routed = profile[tier];
 	const { provider, modelId } = parseCanonicalModelRef(routed.model);
+	const baseThinking = routed.thinking ?? (tier === "high" ? "high" : tier === "low" ? "low" : "medium");
+	const effectiveThinking = thinkingOverrides?.[tier] ?? baseThinking;
+
 	return {
 		profile: profileName,
 		tier,
@@ -485,13 +506,13 @@ function decideRouting(
 		targetModelId: modelId,
 		targetLabel: routed.model,
 		reasoning,
-		thinking: routed.thinking ?? "medium",
+		thinking: effectiveThinking,
 		timestamp: Date.now(),
 	};
 }
 
 function formatDecision(decision: RoutingDecision): string {
-	return `${decision.profile}: ${decision.tier} -> ${decision.targetProvider}/${decision.targetModelId} (${decision.reasoning})`;
+	return `${decision.profile}: ${decision.tier} -> ${decision.targetProvider}/${decision.targetModelId} [${decision.thinking}] (${decision.reasoning})`;
 }
 
 function createErrorMessage(model: Model<Api>, message: string): AssistantMessage {
@@ -541,6 +562,7 @@ function isRouterPersistedState(value: unknown): value is RouterPersistedState {
 		typeof value.selectedProfile === "string" &&
 		(value.pinTier === undefined || isRouterTier(value.pinTier)) &&
 		(value.pinByProfile === undefined || isRouterPinByProfile(value.pinByProfile)) &&
+		(value.thinkingByProfile === undefined || isRouterThinkingByProfile(value.thinkingByProfile)) &&
 		(value.debugEnabled === undefined || typeof value.debugEnabled === "boolean") &&
 		(value.widgetEnabled === undefined || typeof value.widgetEnabled === "boolean") &&
 		(value.debugHistory === undefined ||
@@ -565,6 +587,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 	let selectedProfile = resolveProfileName(FALLBACK_CONFIG, FALLBACK_CONFIG.defaultProfile);
 	let widgetEnabled = false;
 	let pinnedTierByProfile: RouterPinByProfile = {};
+	let thinkingByProfile: RouterThinkingByProfile = {};
 	let debugHistory: RoutingDecision[] = [];
 	let lastNonRouterModel: string | undefined;
 	let lastConfigWarnings: string[] = [];
@@ -641,6 +664,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 		selectedProfile,
 		pinTier: getPinnedTierForProfile(selectedProfile),
 		pinByProfile: { ...pinnedTierByProfile },
+		thinkingByProfile: { ...thinkingByProfile },
 		debugEnabled,
 		widgetEnabled,
 		debugHistory,
@@ -672,6 +696,36 @@ export default function routerExtension(pi: ExtensionAPI) {
 		return entries.length > 0 ? entries.join(", ") : "none";
 	};
 
+	const getThinkingOverride = (profileName: string, tier: RouterTier): ThinkingLevel | undefined => {
+		return thinkingByProfile[profileName]?.[tier];
+	};
+
+	const setThinkingOverride = (profileName: string, tier: RouterTier, level: ThinkingLevel | undefined) => {
+		if (!thinkingByProfile[profileName]) {
+			thinkingByProfile[profileName] = {};
+		}
+		if (level) {
+			thinkingByProfile[profileName]![tier] = level;
+		} else {
+			delete thinkingByProfile[profileName]![tier];
+			if (Object.keys(thinkingByProfile[profileName]!).length === 0) {
+				delete thinkingByProfile[profileName];
+			}
+		}
+	};
+
+	const formatThinkingSummary = () => {
+		const entries = Object.entries(thinkingByProfile)
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([profile, tierMap]) => {
+				const tiers = Object.entries(tierMap)
+					.sort(([a], [b]) => a.localeCompare(b))
+					.map(([tier, level]) => `${tier}:${level}`);
+				return `${profile}(${tiers.join(",")})`;
+			});
+		return entries.length > 0 ? entries.join(", ") : "none";
+	};
+
 	const updateStatus = (ctx: ExtensionContext) => {
 		const activeRouterProfile = routerEnabled ? selectedProfile : undefined;
 		const statusProfile = selectedProfile;
@@ -687,7 +741,8 @@ export default function routerExtension(pi: ExtensionAPI) {
 			const matchesPin = activePin ? lastDecision?.tier === activePin : true;
 
 			if (lastDecision && matchesProfile && matchesPin) {
-				statusText = `router:${activeRouterProfile}${pinLabel} -> ${lastDecision.tier} -> ${lastDecision.targetProvider}/${lastDecision.targetModelId}`;
+				const effectiveThinking = thinkingByProfile[activeRouterProfile]?.[lastDecision.tier] ?? lastDecision.thinking;
+				statusText = `router:${activeRouterProfile}${pinLabel} -> ${lastDecision.tier} -> ${lastDecision.targetProvider}/${lastDecision.targetModelId} (${effectiveThinking})`;
 			} else {
 				statusText = `router:${activeRouterProfile}${pinLabel} -> waiting`;
 			}
@@ -707,8 +762,9 @@ export default function routerExtension(pi: ExtensionAPI) {
 			`Pin: ${activePin ?? "auto"}`,
 		];
 		if (lastDecision && lastDecision.profile === statusProfile) {
+			const effectiveThinking = thinkingByProfile[statusProfile]?.[lastDecision.tier] ?? lastDecision.thinking;
 			widgetLines.push(
-				`Route: ${lastDecision.tier} -> ${lastDecision.targetProvider}/${lastDecision.targetModelId}`,
+				`Route: ${lastDecision.tier} -> ${lastDecision.targetProvider}/${lastDecision.targetModelId} (${effectiveThinking})`,
 				`Phase: ${lastDecision.phase}`,
 			);
 		} else if (!routerEnabled && lastNonRouterModel) {
@@ -757,6 +813,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 							profile,
 							lastDecision,
 							getPinnedTierForProfile(model.id),
+							thinkingByProfile[model.id],
 						);
 						lastDecision = decision;
 						recordDebugDecision(decision);
@@ -775,10 +832,11 @@ export default function routerExtension(pi: ExtensionAPI) {
 							throw new Error(`No API key for routed model: ${decision.targetProvider}/${decision.targetModelId}`);
 						}
 
+						const thinkingOverride = getThinkingOverride(model.id, decision.tier);
 						const delegatedStream = streamSimple(targetModel, context, {
 							...options,
 							apiKey,
-							reasoning: targetModel.reasoning ? decision.thinking : "off",
+							reasoning: targetModel.reasoning ? (thinkingOverride ?? decision.thinking) : "off",
 						});
 
 						for await (const event of delegatedStream) {
@@ -874,6 +932,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 		routerEnabled = ctx.model?.provider === "router";
 		selectedProfile = resolveProfileName(currentConfig, ctx.model?.provider === "router" ? ctx.model.id : selectedProfile);
 		pinnedTierByProfile = {};
+		thinkingByProfile = {};
 		widgetEnabled = false;
 		debugHistory = [];
 		lastNonRouterModel = ctx.model && ctx.model.provider !== "router" ? `${ctx.model.provider}/${ctx.model.id}` : lastNonRouterModel;
@@ -889,17 +948,14 @@ export default function routerExtension(pi: ExtensionAPI) {
 			selectedProfile = resolveProfileName(currentConfig, savedState.selectedProfile);
 			routerEnabled = savedState.enabled;
 			pinnedTierByProfile = savedState.pinByProfile ? { ...savedState.pinByProfile } : {};
+			thinkingByProfile = savedState.thinkingByProfile ? { ...savedState.thinkingByProfile } : {};
 			if (savedState.pinTier) {
 				setPinnedTierForProfile(selectedProfile, savedState.pinTier);
 			}
 			debugEnabled = savedState.debugEnabled ?? debugEnabled;
 			widgetEnabled = savedState.widgetEnabled ?? widgetEnabled;
 			debugHistory = savedState.debugHistory ? [...savedState.debugHistory].slice(-MAX_DEBUG_HISTORY) : [];
-			lastDecision = savedState.lastDecision;
 			lastNonRouterModel = savedState.lastNonRouterModel ?? lastNonRouterModel;
-		} else if (isRoutingDecision(savedState)) {
-			lastDecision = savedState;
-			selectedProfile = resolveProfileName(currentConfig, savedState.profile);
 		}
 
 		await ensureValidActiveRouterProfile(ctx);
@@ -935,6 +991,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 				`Selected profile: ${selectedProfile}`,
 				`Selected profile pin: ${getPinnedTierForProfile(selectedProfile) ?? "auto"}`,
 				`Pins by profile: ${formatPinSummary()}`,
+				`Thinking overrides: ${formatThinkingSummary()}`,
 				`Widget: ${widgetEnabled ? "on" : "off"}`,
 				`Default profile: ${resolveProfileName(currentConfig, currentConfig.defaultProfile)}`,
 				`Available profiles: ${names}`,
@@ -946,7 +1003,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 				lines.push(
 					`Last routed tier: ${lastDecision.tier}`,
 					`Last phase: ${lastDecision.phase}`,
-					`Last model: ${lastDecision.targetProvider}/${lastDecision.targetModelId}`,
+					`Last model: ${lastDecision.targetProvider}/${lastDecision.targetModelId} (${lastDecision.thinking})`,
 					`Reason: ${lastDecision.reasoning}`,
 				);
 			}
@@ -1079,6 +1136,158 @@ export default function routerExtension(pi: ExtensionAPI) {
 			if (success) {
 				ctx.ui.notify(`Router enabled with router/${selectedProfile}`, "info");
 			}
+		},
+	});
+
+	pi.registerCommand("router-thinking", {
+		description: "Override thinking level for the current profile or a named profile/tier",
+		getArgumentCompletions: (prefix: string) => {
+			const trimmedLeft = prefix.trimStart();
+			const hasTrailingSpace = /\s$/.test(prefix);
+			const parts = trimmedLeft.length > 0 ? trimmedLeft.split(/\s+/) : [];
+
+			const tierValues = ["high", "medium", "low"];
+			const levelValues = ["auto", ...THINKING_LEVELS];
+
+			// Completing first argument: <level|auto> or <tier> or <profile>
+			if (parts.length === 0) {
+				return [
+					...levelValues.map((v) => ({ value: v, label: v })),
+					...tierValues.map((v) => ({ value: v, label: v })),
+					...profileNames(currentConfig).map((name) => ({ value: name, label: `router/${name}` })),
+				];
+			}
+
+			if (parts.length === 1 && !hasTrailingSpace) {
+				const token = parts[0];
+				return [
+					...levelValues.filter((v) => v.startsWith(token)).map((v) => ({ value: v, label: v })),
+					...tierValues.filter((v) => v.startsWith(token)).map((v) => ({ value: v, label: v })),
+					...profileNames(currentConfig)
+						.filter((name) => name.startsWith(token))
+						.map((name) => ({ value: name, label: `router/${name}` })),
+				];
+			}
+
+			// Case 1: First arg is level/auto -> Done
+			if (levelValues.includes(parts[0])) {
+				return null;
+			}
+
+			// Case 2: First arg is tier, completing level/auto
+			if (tierValues.includes(parts[0])) {
+				const tier = parts[0];
+				const levelPrefix = hasTrailingSpace ? "" : (parts[1] ?? "");
+				return levelValues
+					.filter((v) => v.startsWith(levelPrefix))
+					.map((v) => ({ value: `${tier} ${v}`, label: `${tier} ${v}` }));
+			}
+
+			// Case 3: First arg is profile
+			if (currentConfig.profiles[parts[0]]) {
+				const profile = parts[0];
+				const nextPrefix = hasTrailingSpace ? "" : (parts[1] ?? "");
+
+				// Completing second arg: <tier> or <level|auto> (for all tiers)
+				if (parts.length === 2 && !hasTrailingSpace) {
+					return [
+						...tierValues.filter((v) => v.startsWith(nextPrefix)).map((v) => ({ value: `${profile} ${v}`, label: v })),
+						...levelValues
+							.filter((v) => v.startsWith(nextPrefix))
+							.map((v) => ({ value: `${profile} ${v}`, label: v })),
+					];
+				}
+
+				// If second arg is level/auto -> Done
+				if (levelValues.includes(parts[1])) {
+					return null;
+				}
+
+				// If second arg is tier, completing third arg level/auto
+				if (tierValues.includes(parts[1])) {
+					const tier = parts[1];
+					const levelPrefix = hasTrailingSpace ? "" : (parts[2] ?? "");
+					return levelValues
+						.filter((v) => v.startsWith(levelPrefix))
+						.map((v) => ({ value: `${profile} ${tier} ${v}`, label: v }));
+				}
+			}
+
+			return null;
+		},
+		handler: async (args, ctx) => {
+			const currentProfile = selectedProfile;
+			const trimmed = args?.trim();
+			if (!trimmed) {
+				ctx.ui.notify(
+					[
+						`Profile: ${currentProfile}`,
+						`Thinking overrides: ${JSON.stringify(thinkingByProfile[currentProfile] ?? {})}`,
+						"Usage: /router-thinking <level|auto>",
+						"   or: /router-thinking <tier> <level|auto>",
+						"   or: /router-thinking <profile> <tier> <level|auto>",
+					].join("\n"),
+					"info",
+				);
+				return;
+			}
+
+			const parts = trimmed.split(/\s+/).filter(Boolean);
+			let profileName = currentProfile;
+			let tier: RouterTier | "all" | undefined = undefined;
+			let levelValue = "";
+
+			const tierValues = ["high", "medium", "low"];
+			const levelValues = ["auto", ...THINKING_LEVELS];
+
+			if (parts.length === 1) {
+				levelValue = parts[0];
+				tier = getPinnedTierForProfile(profileName) ?? (lastDecision?.profile === profileName ? lastDecision.tier : "medium");
+			} else if (parts.length === 2) {
+				if (tierValues.includes(parts[0]) || parts[0] === "all") {
+					tier = parts[0] as RouterTier | "all";
+					levelValue = parts[1];
+				} else {
+					profileName = parts[0];
+					levelValue = parts[1];
+					tier = getPinnedTierForProfile(profileName) ?? (lastDecision?.profile === profileName ? lastDecision.tier : "medium");
+				}
+			} else if (parts.length === 3) {
+				profileName = parts[0];
+				tier = parts[1] as RouterTier | "all";
+				levelValue = parts[2];
+			}
+
+			if (!currentConfig.profiles[profileName]) {
+				ctx.ui.notify(`Unknown router profile: ${profileName}`, "error");
+				return;
+			}
+			if (tier !== "all" && !tierValues.includes(tier)) {
+				ctx.ui.notify(`Invalid tier: ${tier}. Use high, medium, or low.`, "error");
+				return;
+			}
+			if (!levelValues.includes(levelValue)) {
+				ctx.ui.notify(`Invalid thinking level: ${levelValue}. Use auto or: ${THINKING_LEVELS.join(", ")}`, "error");
+				return;
+			}
+
+			const nextLevel = levelValue === "auto" ? undefined : (levelValue as ThinkingLevel);
+			if (tier === "all") {
+				for (const t of tierValues as RouterTier[]) {
+					setThinkingOverride(profileName, t, nextLevel);
+				}
+			} else {
+				setThinkingOverride(profileName, tier, nextLevel);
+			}
+
+			persistState();
+			updateStatus(ctx);
+			ctx.ui.notify(
+				nextLevel
+					? `Router profile ${profileName} thinking (${tier}) set to ${nextLevel}`
+					: `Router profile ${profileName} thinking (${tier}) reset to config defaults`,
+				"info",
+			);
 		},
 	});
 
