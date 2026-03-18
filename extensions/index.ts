@@ -882,10 +882,8 @@ export default function routerExtension(pi: ExtensionAPI) {
 			.findLast((data) => isRouterPersistedState(data) || isRoutingDecision(data));
 
 		if (isRouterPersistedState(savedState)) {
-			selectedProfile = resolveProfileName(
-				currentConfig,
-				routerEnabled && ctx.model?.provider === "router" ? ctx.model.id : savedState.selectedProfile,
-			);
+			selectedProfile = resolveProfileName(currentConfig, savedState.selectedProfile);
+			routerEnabled = savedState.enabled;
 			pinnedTierByProfile = savedState.pinByProfile ? { ...savedState.pinByProfile } : {};
 			if (savedState.pinTier) {
 				setPinnedTierForProfile(selectedProfile, savedState.pinTier);
@@ -901,6 +899,21 @@ export default function routerExtension(pi: ExtensionAPI) {
 		}
 
 		await ensureValidActiveRouterProfile(ctx);
+
+		if (routerEnabled && ctx.model?.provider !== "router") {
+			const routerModel = ctx.modelRegistry.find("router", selectedProfile);
+			if (routerModel) {
+				const success = await pi.setModel(routerModel);
+				if (!success) {
+					ctx.ui.notify(`Failed to restore router/${selectedProfile} after relaunch.`, "warning");
+					routerEnabled = false;
+				}
+			} else {
+				ctx.ui.notify(`Unable to restore router/${selectedProfile}; model is unavailable.`, "warning");
+				routerEnabled = false;
+			}
+		}
+
 		persistState();
 		updateStatus(ctx);
 	};

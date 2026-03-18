@@ -22,6 +22,7 @@ Last updated: 2026-03-18
 - [x] Make router pinning persist per profile and improve `/router-debug` with recent decision history
 - [x] Allow pinning other profiles without switching and add a router state widget
 - [x] Make the router widget toggleable and hidden by default
+- [x] Re-apply the last active router model on relaunch when router was previously enabled
 
 ## Objective
 
@@ -411,9 +412,11 @@ No attempt to perfectly replicate vendor-specific internals.
   - recent decision history is persisted in router state for easier inspection after resume
   - added a router widget showing the current profile, pin, and most recent effective route
   - made the widget toggleable via `/router-widget on|off|toggle` and hidden by default
+  - on relaunch/resume, the extension now re-applies the last active `router/<profile>` model when router state says it was enabled
 - Re-validated the extension after the pinning/debug/widget update:
   - `pi -e ./extensions/index.ts --model router/auto --mode json "/router-pin high" "Summarize ..."` routes the summary turn through the pinned profile tier
   - `pi -e ./extensions/index.ts --model router/auto --mode json "/router-pin high" "/router-pin auto" "Summarize ..."` returns the summary turn to the heuristic path
   - `pi -e ./extensions/index.ts --list-models router` still shows `router/auto` after the latest UI/command changes
+  - relaunch/resume test now restores router execution correctly when the previous active model was `router/auto`
 - Initialized a git repository for the package and committed the current state.
 - Next step: explore optional classifier support and any additional routing controls now that manual override, widgets, and debugging are in place.

@@ -108,5 +108,5 @@ Use `/router-widget on` to show the widget and `/router-widget off` to hide it a
 - This is a provider-based router, not repeated invisible `setModel()` switching per turn.
 - The selected model remains `router/<profile>` while the extension chooses the effective model behind the scenes.
 - The built-in footer still shows the logical router model; the extension status shows the effective routed tier/model.
-- State is restored from session history on resume, fork, and session switch.
+- State is restored from session history on resume, fork, and session switch, and the extension re-applies the last active router model on relaunch when router was enabled.
 - `/router-debug` now shows recent routing decisions and can be controlled with `on`, `off`, `toggle`, and `clear`.
