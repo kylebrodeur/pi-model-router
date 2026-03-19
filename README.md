@@ -1,22 +1,22 @@
 # pi-model-router
 
-Extension-first model router for pi.
-
-Current status: working development preview.
-
-Note: the router widget is now hidden by default and can be toggled with `/router-widget`.
+Modular, extension-first model router for the [pi](https://github.com/mariozechner/pi-coding-agent) coding agent.
 
 ## What it does
 
-- registers a logical custom provider: `router`
-- exposes logical models like `router/auto`
-- chooses `high` / `medium` / `low` per turn using heuristics
-- delegates the real request to an underlying configured model via `@mariozechner/pi-ai`
-- persists router state in session entries
-- surfaces router state through commands and footer status
-- supports explicit router activation/deactivation and tier pinning commands
+- **Logical Router Provider**: Registers a `router` provider that exposes stable profiles (e.g., `router/auto`) as models.
+- **Per-Turn Routing**: Intelligently chooses between `high`, `medium`, and `low` tiers for every single turn based on task complexity.
+- **Advanced Controls**: Includes built-in support for:
+    - **LLM Intent Classifier**: Use a fast model to categorize your requests.
+    - **Custom Rules**: Define keyword-based overrides for specific tasks.
+    - **Context Trigger**: Automatically upgrade to high-reasoning models for large context tasks.
+    - **Cost Budgeting**: Set a session spend limit; once reached, the router stays in lower-cost tiers.
+    - **Fallback Chains**: Automatic retry with alternative models if the primary choice fails.
+- **Phase Memory**: Biased stickiness to keep you in the same tier during multi-turn planning or implementation.
+- **Thinking Control**: Full control over thinking/reasoning levels per tier.
+- **Persistent State**: Pins, profiles, and costs are remembered across agent restarts and conversation branches.
 
-## Install locally for development
+## Installation
 
 From this project directory:
 
@@ -30,27 +30,19 @@ Or load directly for one run:
 pi -e ./extensions/index.ts
 ```
 
-## Configure profiles
+## Configuration
 
 Copy the example config to one of:
+- `~/.pi/agent/model-router.json` (Global)
+- `.pi/model-router.json` (Project-specific)
 
-- `~/.pi/agent/model-router.json`
-- `.pi/model-router.json`
-
-Example:
-
-```bash
-cp model-router.example.json ~/.pi/agent/model-router.json
-```
-
-Config shape:
+### Basic Config Shape
 
 ```json
 {
   "defaultProfile": "auto",
-  "debug": false,
   "classifierModel": "google/gemini-flash-latest",
-  "phaseBias": 0.5,
+  "maxSessionBudget": 1.00,
   "profiles": {
     "auto": {
       "high": { "model": "openai/gpt-5.4-pro", "thinking": "high" },
@@ -61,58 +53,34 @@ Config shape:
 }
 ```
 
-When `classifierModel` is configured, the router uses that model to categorize the user's intent before selecting a tier. This is more accurate but adds latency. If omitted or if the classifier fails, the router falls back to fast heuristics.
+### Configuration Fields
 
-The `phaseBias` (0.0 to 1.0, default 0.5) controls how "sticky" the current conversation phase is. A higher value makes the router more likely to stay in the `high` tier during planning or `medium` tier during implementation, even for shorter messages.
+| Field | Description |
+|---|---|
+| `defaultProfile` | The profile to use when starting a new session. |
+| `classifierModel` | (Optional) Model used to categorize intent. If omitted, fast heuristics are used. |
+| `maxSessionBudget` | (Optional) USD budget for the session. Forces `medium` tier once exceeded. |
+| `largeContextThreshold`| (Optional) Token count trigger to force `high` tier for large contexts. |
+| `phaseBias` | (0.0 - 1.0) Stickiness of the current phase. Higher = more stable. Default `0.5`. |
+| `rules` | List of custom keyword rules (e.g. `{ "matches": "deploy", "tier": "high" }`). |
+| `profiles` | Map of profile definitions, each containing `high`, `medium`, and `low` tiers. |
 
-The extension validates config on load and falls back to built-in defaults when a profile or tier is invalid.
+## Commands
 
-## Usage
+| Command | Description |
+|---|---|
+| `/router` | Show detailed status, current profile, spend, and settings. |
+| `/router-on [profile]`| Enable the router (optionally switching to a specific profile). |
+| `/router-off` | Disable the router and switch back to the last non-router model. |
+| `/router-profile <name>`| Switch to a different router profile. |
+| `/router-pin <tier\|auto>`| Force a specific tier for the current profile (or use `auto` for heuristics). |
+| `/router-fix <tier>` | Correct the *last* decision and pin that tier for the current profile. |
+| `/router-thinking <lv>` | Override the thinking level for the active tier. |
+| `/router-widget <on\|off>`| Toggle the persistent state widget. |
+| `/router-debug <on\|off>` | Toggle turn-by-turn routing notifications. |
+| `/router-reload` | Hot-reload the configuration JSON. |
 
-After loading the extension:
+## Documentation
 
-```text
-/model router/auto
-/router
-/router-profile auto
-/router-on
-/router-pin high
-/router-pin cheap low
-/router-pin auto
-/router-widget on
-/router-widget off
-/router-off
-/router-reload
-/router-debug
-```
-
-`/router-on` switches to the selected or default router profile.
-`/router-pin high|medium|low` forces that tier for future routed turns on the current profile.
-`/router-pin <profile> <high|medium|low|auto>` lets you change another profile without switching to it first.
-`/router-pin auto` clears the current profile pin and restores heuristic routing.
-`/router-off` switches back to the last concrete non-router model.
-
-Pins are remembered per profile, so `router/auto` and `router/cheap` can keep different pinned tiers.
-
-If `router/auto` does not appear in `/model`, run `/router-reload` after adding config.
-
-## Status behavior
-
-When the active model is a router profile, the extension status shows the effective routed target. An optional widget can also show the current profile, pin, and last routed target.
-
-```text
-router:auto -> high -> openai/gpt-5
-router:auto [pin:high] -> high -> openai/gpt-5
-```
-
-When router is not active, status shows the selected profile, that profile's active pin if any, and the last non-router fallback model.
-
-Use `/router-widget on` to show the widget and `/router-widget off` to hide it again.
-
-## Notes
-
-- This is a provider-based router, not repeated invisible `setModel()` switching per turn.
-- The selected model remains `router/<profile>` while the extension chooses the effective model behind the scenes.
-- The built-in footer still shows the logical router model; the extension status shows the effective routed tier/model.
-- State is restored from session history on resume, fork, and session switch, and the extension re-applies the last active router model on relaunch when router was enabled.
-- `/router-debug` now shows recent routing decisions and can be controlled with `on`, `off`, `toggle`, and `clear`.
+- [Architecture Guide](docs/ARCHITECTURE.md): Deep dive into the routing logic and modular design.
+- [Sample Configuration](model-router.example.json): Diverse profile examples (`cheap`, `deep`, `balanced`).
