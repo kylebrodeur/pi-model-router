@@ -7,6 +7,7 @@ import {
   type Context,
   type Model,
   type SimpleStreamOptions,
+  type Message,
 } from '@mariozechner/pi-ai';
 import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
 import type {
@@ -17,7 +18,13 @@ import type {
   RouterThinkingByProfile,
 } from './types';
 import { profileNames, parseCanonicalModelRef } from './config';
-import { phaseForTier, buildRoutingDecision, decideRouting, runClassifier } from './routing';
+import {
+  phaseForTier,
+  buildRoutingDecision,
+  decideRouting,
+  runClassifier,
+  extractTextFromContent,
+} from './routing';
 
 export const createErrorMessage = (model: Model<Api>, message: string): AssistantMessage => {
   return {
@@ -40,6 +47,48 @@ export const createErrorMessage = (model: Model<Api>, message: string): Assistan
   };
 };
 
+/**
+ * Heuristic token estimator (conservative: 3 characters per token)
+ */
+const estimateTokens = (text: string): number => Math.ceil(text.length / 3);
+
+/**
+ * Truncate context to fit within a target token limit by removing oldest messages.
+ * Always preserves the first system message and the latest user message.
+ */
+const truncateContext = (context: Context, limit: number): Context => {
+  const messages = [...context.messages];
+  if (messages.length <= 2) return context;
+
+  // Initial estimate
+  let totalTokens = messages.reduce(
+    (sum, m) => sum + estimateTokens(extractTextFromContent(m.content)),
+    0,
+  );
+  if (totalTokens <= limit) return context;
+
+  const systemMessage = messages[0].role === 'system' ? messages.shift() : undefined;
+  const latestMessage = messages.pop()!; // The current turn
+
+  // Remove oldest until it fits
+  while (messages.length > 0) {
+    const currentTokens =
+      (systemMessage ? estimateTokens(extractTextFromContent(systemMessage.content)) : 0) +
+      estimateTokens(extractTextFromContent(latestMessage.content)) +
+      messages.reduce((sum, m) => sum + estimateTokens(extractTextFromContent(m.content)), 0);
+
+    if (currentTokens <= limit) break;
+    messages.shift(); // Remove oldest
+  }
+
+  const finalMessages: Message[] = [];
+  if (systemMessage) finalMessages.push(systemMessage);
+  finalMessages.push(...messages);
+  finalMessages.push(latestMessage);
+
+  return { ...context, messages: finalMessages };
+};
+
 export const registerRouterProvider = (
   pi: ExtensionAPI,
   state: {
@@ -60,25 +109,48 @@ export const registerRouterProvider = (
     getThinkingOverride: (profileName: string, tier: RouterTier) => any;
   },
 ) => {
-  const names = profileNames(state.currentConfig);
-  const modelsKey = names.join(',');
-  if (state.lastRegisteredModels === modelsKey) return;
+  const profileList = profileNames(state.currentConfig);
 
-  const models = names.map((name) => ({
-    id: name,
-    name: `Router ${name}`,
-    reasoning: true,
-    input: ['text', 'image'] as ('text' | 'image')[],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 2_000_000,
-    maxTokens: 128_000,
-  }));
+  // Map profiles to their high-tier capacities
+  const modelDefinitions = profileList.map((name) => {
+    const profile = state.currentConfig.profiles[name];
+    let contextWindow = 1_000_000;
+    let maxTokens = 64_000;
+
+    if (state.currentModelRegistry) {
+      try {
+        const { provider, modelId } = parseCanonicalModelRef(profile.high.model);
+        const highModel = state.currentModelRegistry.find(provider, modelId);
+        if (highModel) {
+          contextWindow = highModel.contextWindow ?? contextWindow;
+          maxTokens = highModel.maxTokens ?? maxTokens;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    return {
+      id: name,
+      name: `Router ${name}`,
+      reasoning: true,
+      input: ['text', 'image'] as ('text' | 'image')[],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow,
+      maxTokens,
+    };
+  });
+
+  const modelsKey = modelDefinitions
+    .map((m) => `${m.id}:${m.contextWindow}:${m.maxTokens}`)
+    .join(',');
+  if (state.lastRegisteredModels === modelsKey) return;
 
   pi.registerProvider('router', {
     baseUrl: 'router://local',
     apiKey: 'pi-model-router',
     api: 'router-local-api',
-    models,
+    models: modelDefinitions,
     streamSimple(
       model: Model<Api>,
       context: Context,
@@ -89,9 +161,7 @@ export const registerRouterProvider = (
       (async () => {
         try {
           if (!state.currentModelRegistry) {
-            throw new Error(
-              'Router provider not initialized yet. Wait for session_start and retry.',
-            );
+            throw new Error('Router provider not initialized yet. Wait for session_start and retry.');
           }
           const profile = state.currentConfig.profiles[model.id];
           if (!profile) {
@@ -197,15 +267,21 @@ export const registerRouterProvider = (
 
             const apiKey = await state.currentModelRegistry.getApiKey(targetModel);
             if (!apiKey) {
-              lastError = new Error(
-                `No API key for routed model: ${targetProvider}/${targetModelId}`,
-              );
+              lastError = new Error(`No API key for routed model: ${targetProvider}/${targetModelId}`);
               continue;
             }
 
             try {
+              // HONESTY CHECK & AUTO-TRUNCATION
+              // If the picked model has a smaller context than what we reported, truncate now.
+              let effectiveContext = context;
+              const targetLimit = targetModel.contextWindow || 128_000;
+              if (targetLimit < model.contextWindow!) {
+                effectiveContext = truncateContext(context, targetLimit);
+              }
+
               const thinkingOverride = actions.getThinkingOverride(model.id, decision.tier);
-              const delegatedStream = streamSimple(targetModel, context, {
+              const delegatedStream = streamSimple(targetModel, effectiveContext, {
                 ...options,
                 apiKey,
                 reasoning: targetModel.reasoning ? (thinkingOverride ?? decision.thinking) : 'off',
@@ -250,10 +326,7 @@ export const registerRouterProvider = (
           stream.push({
             type: 'error',
             reason: 'error',
-            error: createErrorMessage(
-              model,
-              error instanceof Error ? error.message : String(error),
-            ),
+            error: createErrorMessage(model, error instanceof Error ? error.message : String(error)),
           });
           stream.end();
         } finally {

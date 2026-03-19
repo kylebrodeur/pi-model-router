@@ -341,7 +341,12 @@ const routerExtension = (pi: ExtensionAPI) => {
 
   pi.on('session_start', async (_event, ctx) => {
     isInitialized = true;
+    currentModelRegistry = ctx.modelRegistry;
+    actions.reloadConfig(ctx, { preserveDebug: true });
     await restoreStateFromSession(ctx);
+    // Explicitly call reloadConfig again after restore to ensure capacities are updated
+    // with the real model registry and potentially different profiles from persisted state.
+    actions.reloadConfig(ctx, { preserveDebug: true });
     if (debugEnabled) {
       ctx.ui.notify(
         `Router initialized with profiles: ${profileNames(currentConfig).join(', ')}`,
