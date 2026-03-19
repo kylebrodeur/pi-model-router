@@ -37,6 +37,7 @@ interface RouterConfig {
 	defaultProfile?: string;
 	debug?: boolean;
 	classifierModel?: string;
+	phaseBias?: number;
 	profiles: Record<string, RouterProfile>;
 }
 
@@ -149,6 +150,7 @@ function mergeConfig(base: RouterConfig, override: Partial<RouterConfig>): Route
 		defaultProfile: override.defaultProfile ?? base.defaultProfile,
 		debug: override.debug ?? base.debug,
 		classifierModel: override.classifierModel ?? base.classifierModel,
+		phaseBias: override.phaseBias ?? base.phaseBias,
 		profiles: mergedProfiles,
 	};
 }
@@ -231,6 +233,8 @@ function normalizeConfig(raw: RouterConfig): ConfigLoadResult {
 		defaultProfile = fallbackProfile;
 	}
 
+	const phaseBias = typeof raw.phaseBias === "number" ? Math.max(0, Math.min(1, raw.phaseBias)) : 0.5;
+
 	let classifierModel = typeof raw.classifierModel === "string" ? raw.classifierModel.trim() : undefined;
 	if (classifierModel) {
 		try {
@@ -246,6 +250,7 @@ function normalizeConfig(raw: RouterConfig): ConfigLoadResult {
 			defaultProfile,
 			debug: typeof raw.debug === "boolean" ? raw.debug : false,
 			classifierModel,
+			phaseBias,
 			profiles: normalizedProfiles,
 		},
 		warnings,
@@ -399,6 +404,7 @@ function decideRouting(
 	previousDecision: RoutingDecision | undefined,
 	pinnedTier?: RouterTier,
 	thinkingOverrides?: RouterThinkingByTier,
+	phaseBias = 0.5,
 ): RoutingDecision {
 	const prompt = getLastUserText(context).toLowerCase();
 	const recentConversation = getRecentConversationText(context);
@@ -484,6 +490,10 @@ function decideRouting(
 	let tier: RouterTier = "medium";
 	let reasoning = "Defaulted to medium tier for general coding work.";
 
+	// Sticky phase adjustments
+	const highThreshold = Math.max(40, 120 - (previousDecision?.phase === "planning" ? phaseBias * 80 : 0));
+	const lowThreshold = Math.max(4, 12 - (previousDecision?.phase === "implementation" || previousDecision?.phase === "planning" ? phaseBias * 8 : 0));
+
 	if (pinnedTier) {
 		phase = phaseForTier(pinnedTier);
 		tier = pinnedTier;
@@ -503,12 +513,14 @@ function decideRouting(
 	} else if (
 		containsAny(prompt, planningKeywords) ||
 		prompt.startsWith("why ") ||
-		wordCount >= 120 ||
+		wordCount >= highThreshold ||
 		multiLinePrompt
 	) {
 		phase = "planning";
 		tier = "high";
-		reasoning = "Detected planning, broad analysis, or a high-complexity request.";
+		reasoning = previousDecision?.phase === "planning"
+			? "Continued planning phase based on complexity or keywords."
+			: "Detected planning, broad analysis, or a high-complexity request.";
 	} else if (containsAny(prompt, implementationKeywords)) {
 		phase = "implementation";
 		tier = "medium";
@@ -517,7 +529,7 @@ function decideRouting(
 		phase = "lightweight";
 		tier = "low";
 		reasoning = "Detected a short read-only lookup request.";
-	} else if (previousDecision?.phase === "planning" && toolResultCount === 0) {
+	} else if (previousDecision?.phase === "planning" && toolResultCount === 0 && wordCount > lowThreshold) {
 		phase = "planning";
 		tier = "high";
 		reasoning = "Kept the planning-phase bias because the conversation still looks exploratory.";
@@ -529,7 +541,7 @@ function decideRouting(
 		phase = "implementation";
 		tier = "medium";
 		reasoning = "Detected active implementation work from prior tools or recent plan execution context.";
-	} else if (wordCount <= 12) {
+	} else if (wordCount <= lowThreshold) {
 		phase = "lightweight";
 		tier = "low";
 		reasoning = "Detected a short bounded request.";
@@ -542,6 +554,7 @@ async function runClassifier(
 	classifierModelRef: string,
 	modelRegistry: ExtensionContext["modelRegistry"],
 	context: Context,
+	currentPhase?: RouterPhase,
 ): Promise<{ tier: RouterTier; reasoning: string } | undefined> {
 	try {
 		const { provider, modelId } = parseCanonicalModelRef(classifierModelRef);
@@ -561,6 +574,7 @@ Tiers:
 - medium: Implementation of a known plan, multi-file edits, normal coding work, focused debugging, tests/fixes.
 - low: Summaries, changelogs, formatting, quick explanations, small bounded transforms, simple read-only lookup.
 
+${currentPhase ? `Current conversation phase: ${currentPhase}\n` : ""}
 Recent history:
 ${historyText}
 
@@ -569,7 +583,10 @@ ${promptText}
 
 Return your decision in exactly two lines:
 Tier: [high|medium|low]
-Reasoning: [one short sentence]`;
+Reasoning: [one short sentence]
+
+${currentPhase === "planning" ? "Consider that the conversation is currently in a planning phase. Bias toward \"high\" unless the request is clearly a simple implementation or summary." : ""}
+${currentPhase === "implementation" ? "Consider that the conversation is currently in an implementation phase. Bias toward \"medium\" unless the request is clearly planning or a simple summary." : ""}`;
 
 		const classifierContext: Context = {
 			...context,
@@ -917,6 +934,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 								currentConfig.classifierModel,
 								currentModelRegistry,
 								context,
+								lastDecision?.phase,
 							);
 							if (classifierResult) {
 								decision = buildRoutingDecision(
@@ -936,6 +954,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 									lastDecision,
 									pinnedTier,
 									thinkingByProfile[model.id],
+									currentConfig.phaseBias,
 								);
 							}
 						} else {
@@ -946,6 +965,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 								lastDecision,
 								pinnedTier,
 								thinkingByProfile[model.id],
+								currentConfig.phaseBias,
 							);
 						}
 
@@ -1129,6 +1149,7 @@ export default function routerExtension(pi: ExtensionAPI) {
 				`Pins by profile: ${formatPinSummary()}`,
 				`Thinking overrides: ${formatThinkingSummary()}`,
 				`Widget: ${widgetEnabled ? "on" : "off"}`,
+				`Phase bias: ${currentConfig.phaseBias}`,
 				`Default profile: ${resolveProfileName(currentConfig, currentConfig.defaultProfile)}`,
 				`Available profiles: ${names}`,
 				`Last non-router model: ${formatModelRef(lastNonRouterModel)}`,

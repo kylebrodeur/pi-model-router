@@ -2,6 +2,7 @@
   "defaultProfile": "auto",
   "debug": false,
   "classifierModel": "google/gemini-flash-latest",
+  "phaseBias": 0.5,
   "profiles": {
     "auto": {
       "high": {

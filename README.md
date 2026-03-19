@@ -50,6 +50,7 @@ Config shape:
   "defaultProfile": "auto",
   "debug": false,
   "classifierModel": "google/gemini-flash-latest",
+  "phaseBias": 0.5,
   "profiles": {
     "auto": {
       "high": { "model": "openai/gpt-5.4-pro", "thinking": "high" },
@@ -61,6 +62,8 @@ Config shape:
 ```
 
 When `classifierModel` is configured, the router uses that model to categorize the user's intent before selecting a tier. This is more accurate but adds latency. If omitted or if the classifier fails, the router falls back to fast heuristics.
+
+The `phaseBias` (0.0 to 1.0, default 0.5) controls how "sticky" the current conversation phase is. A higher value makes the router more likely to stay in the `high` tier during planning or `medium` tier during implementation, even for shorter messages.
 
 The extension validates config on load and falls back to built-in defaults when a profile or tier is invalid.
 

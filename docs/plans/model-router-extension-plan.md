@@ -24,6 +24,7 @@ Last updated: 2026-03-18
 - [x] Make the router widget toggleable and hidden by default
 - [x] Re-apply the last active router model on relaunch when router was previously enabled
 - [x] Implement optional LLM-based classifier for ambiguous routing cases
+- [x] Enhance phase memory with `phaseBias` and contextual classifier hints
 
 ## Objective
 
@@ -427,4 +428,5 @@ No attempt to perfectly replicate vendor-specific internals.
 - Adjusted session restoration logic on agent relaunch and session switch so that the `lastDecision` (previous routed model and thinking level) is intentionally *not* restored. This ensures the router status properly shows "waiting" initially instead of displaying outdated routing information from previous turns.
 - Implemented optional LLM-based classifier support. When `classifierModel` is configured, the router calls this model to categorize the user's intent. The classifier output includes the chosen tier and a short reasoning, which is then used for routing if the classifier succeeds. Fast heuristics are used as a fallback if the classifier is unconfigured or fails.
 - Improved classifier robustness by handling different event types (e.g., `text_delta` from Google/Gemini models) during intent classification.
-- Next step: explore phase memory improvements and additional routing controls now that classifier support is in place.
+- Enhanced phase memory by introducing `phaseBias` (configurable stickiness). The current conversation phase is now passed to the classifier to provide better context for intent categorization. Heuristics also use `phaseBias` to modulate complexity thresholds, making routing more stable across multi-turn tasks.
+- Next step: explore additional routing controls or Phase 3 package polish.
