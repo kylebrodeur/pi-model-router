@@ -43,7 +43,7 @@ export const createErrorMessage = (model: Model<Api>, message: string): Assistan
 export const registerRouterProvider = (
   pi: ExtensionAPI,
   state: {
-    isProviderRegistered: boolean;
+    lastRegisteredModels: string;
     readonly currentConfig: RouterConfig;
     readonly currentModelRegistry: ExtensionContext['modelRegistry'] | undefined;
     readonly lastExtensionContext: ExtensionContext | undefined;
@@ -60,9 +60,11 @@ export const registerRouterProvider = (
     getThinkingOverride: (profileName: string, tier: RouterTier) => any;
   },
 ) => {
-  if (state.isProviderRegistered) return;
+  const names = profileNames(state.currentConfig);
+  const modelsKey = names.join(',');
+  if (state.lastRegisteredModels === modelsKey) return;
 
-  const models = profileNames(state.currentConfig).map((name) => ({
+  const models = names.map((name) => ({
     id: name,
     name: `Router ${name}`,
     reasoning: true,
@@ -263,5 +265,5 @@ export const registerRouterProvider = (
     },
   });
 
-  state.isProviderRegistered = true;
+  state.lastRegisteredModels = modelsKey;
 };

@@ -30,7 +30,7 @@ const routerExtension = (pi: ExtensionAPI) => {
   let routerEnabled = false;
   let selectedProfile = resolveProfileName(FALLBACK_CONFIG, FALLBACK_CONFIG.defaultProfile);
   let widgetEnabled = false;
-  let isProviderRegistered = false;
+  let lastRegisteredModels = '';
   let pinnedTierByProfile: RouterPinByProfile = {};
   let thinkingByProfile: RouterThinkingByProfile = {};
   let debugHistory: RoutingDecision[] = [];
@@ -167,11 +167,11 @@ const routerExtension = (pi: ExtensionAPI) => {
       registerRouterProvider(
         pi,
         {
-          get isProviderRegistered() {
-            return isProviderRegistered;
+          get lastRegisteredModels() {
+            return lastRegisteredModels;
           },
-          set isProviderRegistered(v) {
-            isProviderRegistered = v;
+          set lastRegisteredModels(v) {
+            lastRegisteredModels = v;
           },
           get currentConfig() {
             return currentConfig;
@@ -218,7 +218,7 @@ const routerExtension = (pi: ExtensionAPI) => {
     },
   };
 
-  actions.registerRouterProvider();
+  actions.reloadConfig();
 
   const restoreStateFromSession = async (ctx: ExtensionContext) => {
     lastExtensionContext = ctx;
