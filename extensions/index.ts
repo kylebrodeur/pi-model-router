@@ -40,6 +40,7 @@ const routerExtension = (pi: ExtensionAPI) => {
   let lastConfigWarnings: string[] = [];
   let lastPersistedSnapshot: string | undefined;
   let isInitialized = false;
+  let isInternalModelSwitch = false;
 
   const getPinnedTierForProfile = (profileName: string): RouterTier | undefined =>
     pinnedTierByProfile[profileName];
@@ -144,6 +145,11 @@ const routerExtension = (pi: ExtensionAPI) => {
         return false;
       }
       const resolvedProfile = resolveProfileName(currentConfig, profileName);
+
+      // Ensure the provider is registered with current capacities for this profile
+      actions.registerRouterProvider();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
       const routerModel = ctx.modelRegistry.find('router', resolvedProfile);
       if (!routerModel) {
         ctx.ui.notify(`Unknown router profile: ${profileName}`, 'error');
@@ -152,7 +158,9 @@ const routerExtension = (pi: ExtensionAPI) => {
       if (ctx.model && ctx.model.provider !== 'router') {
         lastNonRouterModel = `${ctx.model.provider}/${ctx.model.id}`;
       }
+      isInternalModelSwitch = true;
       const success = await pi.setModel(routerModel);
+      isInternalModelSwitch = false;
       if (!success) {
         ctx.ui.notify(`Failed to switch to router/${resolvedProfile}`, 'error');
         return false;
@@ -226,6 +234,9 @@ const routerExtension = (pi: ExtensionAPI) => {
     currentCwd = ctx.cwd;
     actions.reloadConfig();
 
+    // Give the registry a moment to synchronize after re-registration
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
     routerEnabled = ctx.model?.provider === 'router';
     selectedProfile = resolveProfileName(
       currentConfig,
@@ -267,10 +278,12 @@ const routerExtension = (pi: ExtensionAPI) => {
 
     await actions.ensureValidActiveRouterProfile(ctx);
 
-    if (routerEnabled && ctx.model?.provider !== 'router') {
+    if (routerEnabled) {
       const routerModel = ctx.modelRegistry.find('router', selectedProfile);
       if (routerModel) {
+        isInternalModelSwitch = true;
         const success = await pi.setModel(routerModel);
+        isInternalModelSwitch = false;
         if (!success) {
           ctx.ui.notify(`Failed to restore router/${selectedProfile} after relaunch.`, 'warning');
           routerEnabled = false;
@@ -351,10 +364,25 @@ const routerExtension = (pi: ExtensionAPI) => {
   });
 
   pi.on('model_select', async (event, ctx) => {
-    if (!isInitialized) return;
+    if (!isInitialized || isInternalModelSwitch) return;
     if (event.model.provider === 'router') {
+      const profileName = resolveProfileName(currentConfig, event.model.id);
+
+      // If the selected model has stale capacities (e.g. from the initial registration),
+      // re-apply the model from the registry to force a TUI refresh.
+      const registryModel = ctx.modelRegistry.find('router', profileName);
+      if (
+        registryModel &&
+        (registryModel.contextWindow !== event.model.contextWindow ||
+          registryModel.maxTokens !== event.model.maxTokens)
+      ) {
+        isInternalModelSwitch = true;
+        await pi.setModel(registryModel);
+        isInternalModelSwitch = false;
+      }
+
       routerEnabled = true;
-      selectedProfile = resolveProfileName(currentConfig, event.model.id);
+      selectedProfile = profileName;
     } else {
       const branchSize = ctx.sessionManager.getBranch().length;
       if (branchSize > 0) {
