@@ -5,12 +5,15 @@ The `pi-model-router` is an extension-first model router for the `pi` coding age
 ## Core Concepts
 
 ### 1. Profiles & Tiers
+
 The router is organized into **Profiles** (e.g., `auto`, `cheap`, `deep`). Each profile defines three **Tiers**:
+
 - **High**: Reserved for architecture, design, complex debugging, and planning. Uses high-reasoning models.
 - **Medium**: The default for standard implementation, multi-file edits, and focused fixes.
 - **Low**: Used for summaries, changelogs, formatting, and simple read-only lookups.
 
 ### 2. Custom Provider Implementation
+
 The extension uses `pi.registerProvider` to hook into the `pi` model lifecycle. This ensures that the selected model in the `pi` footer remains stable (e.g., `router/auto`) while the underlying model changes transparently turn-by-turn via the `streamSimple` interception.
 
 ## Routing Decision Flow
@@ -41,6 +44,7 @@ The extension is modularized for maintainability:
 ## State & Persistence
 
 The router state is persisted using `pi.appendEntry` with a custom type `router-state`. This allows the router to:
+
 - Restore the active profile and pins across agent relaunches.
 - Maintain independent pins and state for different conversation branches.
 - Track accumulated session costs safely.

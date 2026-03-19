@@ -1,237 +1,267 @@
 import {
-	createAssistantMessageEventStream,
-	streamSimple,
-	type Api,
-	type AssistantMessage,
-	type AssistantMessageEventStream,
-	type Context,
-	type Model,
-	type SimpleStreamOptions,
-} from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+  createAssistantMessageEventStream,
+  streamSimple,
+  type Api,
+  type AssistantMessage,
+  type AssistantMessageEventStream,
+  type Context,
+  type Model,
+  type SimpleStreamOptions,
+} from '@mariozechner/pi-ai';
+import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
 import type {
-	RouterConfig,
-	RoutingDecision,
-	RouterTier,
-	RouterPinByProfile,
-	RouterThinkingByProfile,
-} from "./types";
-import { profileNames, parseCanonicalModelRef } from "./config";
-import { phaseForTier, buildRoutingDecision, decideRouting, runClassifier } from "./routing";
+  RouterConfig,
+  RoutingDecision,
+  RouterTier,
+  RouterPinByProfile,
+  RouterThinkingByProfile,
+} from './types';
+import { profileNames, parseCanonicalModelRef } from './config';
+import { phaseForTier, buildRoutingDecision, decideRouting, runClassifier } from './routing';
 
-export function createErrorMessage(model: Model<Api>, message: string): AssistantMessage {
-	return {
-		role: "assistant",
-		content: [],
-		api: model.api,
-		provider: model.provider,
-		model: model.id,
-		usage: {
-			input: 0,
-			output: 0,
-			cacheRead: 0,
-			cacheWrite: 0,
-			totalTokens: 0,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		},
-		stopReason: "error",
-		errorMessage: message,
-		timestamp: Date.now(),
-	};
-}
+export const createErrorMessage = (model: Model<Api>, message: string): AssistantMessage => {
+  return {
+    role: 'assistant',
+    content: [],
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: 'error',
+    errorMessage: message,
+    timestamp: Date.now(),
+  };
+};
 
-export function registerRouterProvider(
-	pi: ExtensionAPI,
-	state: {
-		isProviderRegistered: boolean;
-		readonly currentConfig: RouterConfig;
-		readonly currentModelRegistry: ExtensionContext["modelRegistry"] | undefined;
-		readonly lastExtensionContext: ExtensionContext | undefined;
-		selectedProfile: string;
-		routerEnabled: boolean;
-		lastDecision: RoutingDecision | undefined;
-		readonly thinkingByProfile: RouterThinkingByProfile;
-		readonly pinnedTierByProfile: RouterPinByProfile;
-		accumulatedCost: number;
-	},
-	actions: {
-		persistState: () => void;
-		recordDebugDecision: (decision: RoutingDecision) => void;
-		getThinkingOverride: (profileName: string, tier: RouterTier) => any;
-	}
-) {
-	if (state.isProviderRegistered) return;
+export const registerRouterProvider = (
+  pi: ExtensionAPI,
+  state: {
+    isProviderRegistered: boolean;
+    readonly currentConfig: RouterConfig;
+    readonly currentModelRegistry: ExtensionContext['modelRegistry'] | undefined;
+    readonly lastExtensionContext: ExtensionContext | undefined;
+    selectedProfile: string;
+    routerEnabled: boolean;
+    lastDecision: RoutingDecision | undefined;
+    readonly thinkingByProfile: RouterThinkingByProfile;
+    readonly pinnedTierByProfile: RouterPinByProfile;
+    accumulatedCost: number;
+  },
+  actions: {
+    persistState: () => void;
+    recordDebugDecision: (decision: RoutingDecision) => void;
+    getThinkingOverride: (profileName: string, tier: RouterTier) => any;
+  },
+) => {
+  if (state.isProviderRegistered) return;
 
-	const models = profileNames(state.currentConfig).map((name) => ({
-		id: name,
-		name: `Router ${name}`,
-		reasoning: true,
-		input: ["text", "image"] as ("text" | "image")[],
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: 2_000_000,
-		maxTokens: 128_000,
-	}));
+  const models = profileNames(state.currentConfig).map((name) => ({
+    id: name,
+    name: `Router ${name}`,
+    reasoning: true,
+    input: ['text', 'image'] as ('text' | 'image')[],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 2_000_000,
+    maxTokens: 128_000,
+  }));
 
-	pi.registerProvider("router", {
-		baseUrl: "router://local",
-		apiKey: "pi-model-router",
-		api: "router-local-api",
-		models,
-		streamSimple(model: Model<Api>, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream {
-			const stream = createAssistantMessageEventStream();
+  pi.registerProvider('router', {
+    baseUrl: 'router://local',
+    apiKey: 'pi-model-router',
+    api: 'router-local-api',
+    models,
+    streamSimple(
+      model: Model<Api>,
+      context: Context,
+      options?: SimpleStreamOptions,
+    ): AssistantMessageEventStream {
+      const stream = createAssistantMessageEventStream();
 
-			(async () => {
-				try {
-					if (!state.currentModelRegistry) {
-						throw new Error("Router provider not initialized yet. Wait for session_start and retry.");
-					}
-					const profile = state.currentConfig.profiles[model.id];
-					if (!profile) {
-						throw new Error(`Unknown router profile: ${model.id}`);
-					}
+      (async () => {
+        try {
+          if (!state.currentModelRegistry) {
+            throw new Error(
+              'Router provider not initialized yet. Wait for session_start and retry.',
+            );
+          }
+          const profile = state.currentConfig.profiles[model.id];
+          if (!profile) {
+            throw new Error(`Unknown router profile: ${model.id}`);
+          }
 
-					state.selectedProfile = model.id;
-					state.routerEnabled = true;
+          state.selectedProfile = model.id;
+          state.routerEnabled = true;
 
-					const pinnedTier = state.pinnedTierByProfile[model.id];
-					const isBudgetExceeded = state.currentConfig.maxSessionBudget !== undefined && state.accumulatedCost >= state.currentConfig.maxSessionBudget;
+          const pinnedTier = state.pinnedTierByProfile[model.id];
+          const isBudgetExceeded =
+            state.currentConfig.maxSessionBudget !== undefined &&
+            state.accumulatedCost >= state.currentConfig.maxSessionBudget;
 
-					let decision: RoutingDecision = decideRouting(
-						context,
-						model.id,
-						profile,
-						state.lastDecision,
-						pinnedTier,
-						state.thinkingByProfile[model.id],
-						state.currentConfig.phaseBias,
-						state.currentConfig.rules,
-						isBudgetExceeded,
-					);
+          let decision: RoutingDecision = decideRouting(
+            context,
+            model.id,
+            profile,
+            state.lastDecision,
+            pinnedTier,
+            state.thinkingByProfile[model.id],
+            state.currentConfig.phaseBias,
+            state.currentConfig.rules,
+            isBudgetExceeded,
+          );
 
-					// Optional Context Trigger Upgrade
-					if (state.currentConfig.largeContextThreshold && decision.tier !== "high" && state.lastExtensionContext) {
-						try {
-							const usage = await state.lastExtensionContext.getContextUsage();
-							if (usage.totalTokens > state.currentConfig.largeContextThreshold) {
-								decision = buildRoutingDecision(
-									model.id,
-									profile,
-									"high",
-									"planning",
-									`Context usage (${usage.totalTokens}) exceeds threshold (${state.currentConfig.largeContextThreshold}). Forced high tier.`,
-									state.thinkingByProfile[model.id],
-									false,
-								);
-								decision.isContextTriggered = true;
-							}
-						} catch (e) {
-							// ignore
-						}
-					}
+          // Optional Context Trigger Upgrade
+          if (
+            state.currentConfig.largeContextThreshold &&
+            decision.tier !== 'high' &&
+            state.lastExtensionContext
+          ) {
+            try {
+              const usage = await state.lastExtensionContext.getContextUsage();
+              if (usage.totalTokens > state.currentConfig.largeContextThreshold) {
+                decision = buildRoutingDecision(
+                  model.id,
+                  profile,
+                  'high',
+                  'planning',
+                  `Context usage (${usage.totalTokens}) exceeds threshold (${state.currentConfig.largeContextThreshold}). Forced high tier.`,
+                  state.thinkingByProfile[model.id],
+                  false,
+                );
+                decision.isContextTriggered = true;
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
 
-					// Classifier Override
-					if (state.currentConfig.classifierModel && !pinnedTier && !decision.isContextTriggered && !decision.isRuleMatched) {
-						const classifierResult = await runClassifier(
-							state.currentConfig.classifierModel,
-							state.currentModelRegistry,
-							context,
-							state.lastDecision?.phase,
-						);
-						if (classifierResult) {
-							decision = buildRoutingDecision(
-								model.id,
-								profile,
-								classifierResult.tier,
-								phaseForTier(classifierResult.tier),
-								`Classifier: ${classifierResult.reasoning}`,
-								state.thinkingByProfile[model.id],
-								true,
-							);
-							if (isBudgetExceeded && decision.tier === "high") {
-								decision.tier = "medium";
-								decision.phase = "implementation";
-								decision.reasoning = `Budget exceeded. Downgraded classifier decision to medium. (Original: ${decision.reasoning})`;
-								decision.isBudgetForced = true;
-							}
-						}
-					}
+          // Classifier Override
+          if (
+            state.currentConfig.classifierModel &&
+            !pinnedTier &&
+            !decision.isContextTriggered &&
+            !decision.isRuleMatched
+          ) {
+            const classifierResult = await runClassifier(
+              state.currentConfig.classifierModel,
+              state.currentModelRegistry,
+              context,
+              state.lastDecision?.phase,
+            );
+            if (classifierResult) {
+              decision = buildRoutingDecision(
+                model.id,
+                profile,
+                classifierResult.tier,
+                phaseForTier(classifierResult.tier),
+                `Classifier: ${classifierResult.reasoning}`,
+                state.thinkingByProfile[model.id],
+                true,
+              );
+              if (isBudgetExceeded && decision.tier === 'high') {
+                decision.tier = 'medium';
+                decision.phase = 'implementation';
+                decision.reasoning = `Budget exceeded. Downgraded classifier decision to medium. (Original: ${decision.reasoning})`;
+                decision.isBudgetForced = true;
+              }
+            }
+          }
 
-					state.lastDecision = decision;
-					actions.recordDebugDecision(decision);
+          state.lastDecision = decision;
+          actions.recordDebugDecision(decision);
 
-					const modelsToTry = [decision.targetLabel, ...(profile[decision.tier].fallbacks ?? [])];
-					let lastError: any;
-					let success = false;
+          const modelsToTry = [decision.targetLabel, ...(profile[decision.tier].fallbacks ?? [])];
+          let lastError: any;
+          let success = false;
 
-					for (let i = 0; i < modelsToTry.length; i++) {
-						const modelRef = modelsToTry[i];
-						const { provider: targetProvider, modelId: targetModelId } = parseCanonicalModelRef(modelRef);
+          for (let i = 0; i < modelsToTry.length; i++) {
+            const modelRef = modelsToTry[i];
+            const { provider: targetProvider, modelId: targetModelId } =
+              parseCanonicalModelRef(modelRef);
 
-						if (targetProvider === "router") continue;
+            if (targetProvider === 'router') continue;
 
-						const targetModel = state.currentModelRegistry.find(targetProvider, targetModelId);
-						if (!targetModel) {
-							lastError = new Error(`Routed model not found: ${targetProvider}/${targetModelId}`);
-							continue;
-						}
+            const targetModel = state.currentModelRegistry.find(targetProvider, targetModelId);
+            if (!targetModel) {
+              lastError = new Error(`Routed model not found: ${targetProvider}/${targetModelId}`);
+              continue;
+            }
 
-						const apiKey = await state.currentModelRegistry.getApiKey(targetModel);
-						if (!apiKey) {
-							lastError = new Error(`No API key for routed model: ${targetProvider}/${targetModelId}`);
-							continue;
-						}
+            const apiKey = await state.currentModelRegistry.getApiKey(targetModel);
+            if (!apiKey) {
+              lastError = new Error(
+                `No API key for routed model: ${targetProvider}/${targetModelId}`,
+              );
+              continue;
+            }
 
-						try {
-							const thinkingOverride = actions.getThinkingOverride(model.id, decision.tier);
-							const delegatedStream = streamSimple(targetModel, context, {
-								...options,
-								apiKey,
-								reasoning: targetModel.reasoning ? (thinkingOverride ?? decision.thinking) : "off",
-							});
+            try {
+              const thinkingOverride = actions.getThinkingOverride(model.id, decision.tier);
+              const delegatedStream = streamSimple(targetModel, context, {
+                ...options,
+                apiKey,
+                reasoning: targetModel.reasoning ? (thinkingOverride ?? decision.thinking) : 'off',
+              });
 
-							let contentReceived = false;
-							for await (const event of delegatedStream) {
-								if (event.type === "done") {
-									const cost = event.message.usage?.cost?.total ?? 0;
-									state.accumulatedCost += cost;
-									event.message.provider = "router";
-									event.message.model = model.id;
-								}
-								if (event.type === "error" && !contentReceived) {
-									throw new Error((event as any).error?.errorMessage || "Model failed before sending content.");
-								}
-								const isContent = event.type === "chunk" || event.type === "text_delta" || event.type === "thinking_delta" || (event.type as string) === "tool_call_delta" || (event.type as string) === "toolCall";
-								if (isContent) contentReceived = true;
-								stream.push(event);
-							}
-							success = true;
-							if (i > 0) decision.isFallback = true;
-							break;
-						} catch (err) {
-							lastError = err;
-						}
-					}
+              let contentReceived = false;
+              for await (const event of delegatedStream) {
+                if (event.type === 'done') {
+                  const cost = event.message.usage?.cost?.total ?? 0;
+                  state.accumulatedCost += cost;
+                  event.message.provider = 'router';
+                  event.message.model = model.id;
+                }
+                if (event.type === 'error' && !contentReceived) {
+                  throw new Error(
+                    (event as any).error?.errorMessage || 'Model failed before sending content.',
+                  );
+                }
+                const isContent =
+                  event.type === 'chunk' ||
+                  event.type === 'text_delta' ||
+                  event.type === 'thinking_delta' ||
+                  (event.type as string) === 'tool_call_delta' ||
+                  (event.type as string) === 'toolCall';
+                if (isContent) contentReceived = true;
+                stream.push(event);
+              }
+              success = true;
+              if (i > 0) decision.isFallback = true;
+              break;
+            } catch (err) {
+              lastError = err;
+            }
+          }
 
-					if (!success) {
-						throw lastError || new Error("Failed to delegate to any model in the chain.");
-					}
+          if (!success) {
+            throw lastError || new Error('Failed to delegate to any model in the chain.');
+          }
 
-					stream.end();
-				} catch (error) {
-					stream.push({
-						type: "error",
-						reason: "error",
-						error: createErrorMessage(model, error instanceof Error ? error.message : String(error)),
-					});
-					stream.end();
-				} finally {
-					actions.persistState();
-				}
-			})();
+          stream.end();
+        } catch (error) {
+          stream.push({
+            type: 'error',
+            reason: 'error',
+            error: createErrorMessage(
+              model,
+              error instanceof Error ? error.message : String(error),
+            ),
+          });
+          stream.end();
+        } finally {
+          actions.persistState();
+        }
+      })();
 
-			return stream;
-		},
-	});
+      return stream;
+    },
+  });
 
-	state.isProviderRegistered = true;
-}
+  state.isProviderRegistered = true;
+};
