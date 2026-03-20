@@ -351,7 +351,7 @@ ${currentPhase === 'implementation' ? 'Consider that the conversation is current
       messages: [{ role: 'user', content: classifierPrompt }],
     };
 
-    const stream = streamSimple(model, classifierContext, { apiKey, reasoning: 'off' });
+    const stream = streamSimple(model, classifierContext, { apiKey });
     let fullText = '';
     for await (const event of stream) {
       if (event.type === 'chunk' && typeof (event as any).content === 'string') {

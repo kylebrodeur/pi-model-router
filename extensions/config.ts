@@ -17,9 +17,9 @@ export const FALLBACK_CONFIG: RouterConfig = {
   debug: false,
   profiles: {
     auto: {
-      high: { model: 'openai/gpt-5.4-pro', thinking: 'high' },
-      medium: { model: 'google/gemini-flash-latest', thinking: 'medium' },
-      low: { model: 'openai/gpt-5.4-nano', thinking: 'low' },
+      high: { model: 'openai/gpt-5.4-pro', thinking: 'off' },
+      medium: { model: 'google/gemini-flash-latest', thinking: 'off' },
+      low: { model: 'openai/gpt-5.4-nano', thinking: 'off' },
     },
   },
 };

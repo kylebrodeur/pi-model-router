@@ -384,11 +384,8 @@ const routerExtension = (pi: ExtensionAPI) => {
       routerEnabled = true;
       selectedProfile = profileName;
     } else {
-      const branchSize = ctx.sessionManager.getBranch().length;
-      if (branchSize > 0) {
-        routerEnabled = false;
-        lastNonRouterModel = `${event.model.provider}/${event.model.id}`;
-      }
+      routerEnabled = false;
+      lastNonRouterModel = `${event.model.provider}/${event.model.id}`;
     }
     persistState();
     actions.updateStatus(ctx);
@@ -403,6 +400,14 @@ const routerExtension = (pi: ExtensionAPI) => {
   });
 
   pi.on('turn_end', async (_event, ctx) => {
+    if (routerEnabled && ctx.model?.provider !== 'router') {
+      const routerModel = ctx.modelRegistry.find('router', selectedProfile);
+      if (routerModel) {
+        isInternalModelSwitch = true;
+        await pi.setModel(routerModel);
+        isInternalModelSwitch = false;
+      }
+    }
     persistState();
     actions.updateStatus(ctx);
   });

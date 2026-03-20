@@ -111,29 +111,38 @@ export const registerRouterProvider = (
 ) => {
   const profileList = profileNames(state.currentConfig);
 
-  // Map profiles to their high-tier capacities
+  // Map profiles to their capacities
   const modelDefinitions = profileList.map((name) => {
     const profile = state.currentConfig.profiles[name];
     let contextWindow = 1_000_000;
     let maxTokens = 64_000;
+    let anyTierSupportsReasoning = false;
 
     if (state.currentModelRegistry) {
-      try {
-        const { provider, modelId } = parseCanonicalModelRef(profile.high.model);
-        const highModel = state.currentModelRegistry.find(provider, modelId);
-        if (highModel) {
-          contextWindow = highModel.contextWindow ?? contextWindow;
-          maxTokens = highModel.maxTokens ?? maxTokens;
+      const tiers: RouterTier[] = ['high', 'medium', 'low'];
+      for (const tier of tiers) {
+        try {
+          const { provider, modelId } = parseCanonicalModelRef(profile[tier].model);
+          const tierModel = state.currentModelRegistry.find(provider, modelId);
+          if (tierModel) {
+            if (tier === 'high') {
+              contextWindow = tierModel.contextWindow ?? contextWindow;
+              maxTokens = tierModel.maxTokens ?? maxTokens;
+            }
+            if (tierModel.reasoning) {
+              anyTierSupportsReasoning = true;
+            }
+          }
+        } catch (e) {
+          // ignore
         }
-      } catch (e) {
-        // ignore
       }
     }
 
     return {
       id: name,
       name: `Router ${name}`,
-      reasoning: true,
+      reasoning: anyTierSupportsReasoning,
       input: ['text', 'image'] as ('text' | 'image')[],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow,
@@ -142,7 +151,7 @@ export const registerRouterProvider = (
   });
 
   const modelsKey = modelDefinitions
-    .map((m) => `${m.id}:${m.contextWindow}:${m.maxTokens}`)
+    .map((m) => `${m.id}:${m.contextWindow}:${m.maxTokens}:${m.reasoning}`)
     .join(',');
   if (state.lastRegisteredModels === modelsKey) return;
 
@@ -245,6 +254,32 @@ export const registerRouterProvider = (
             }
           }
 
+          const lastMessage = context.messages[context.messages.length - 1];
+          const previousDecision = state.lastDecision;
+          const isGoogleThinkingToolContinuation =
+            lastMessage?.role === 'toolResult' &&
+            previousDecision?.profile === model.id &&
+            previousDecision.targetProvider === 'google' &&
+            previousDecision.thinking !== 'off' &&
+            decision.targetProvider === 'google' &&
+            decision.thinking !== 'off' &&
+            previousDecision.targetLabel !== decision.targetLabel;
+
+          if (isGoogleThinkingToolContinuation) {
+            decision = {
+              ...decision,
+              tier: previousDecision!.tier,
+              phase: previousDecision!.phase,
+              targetProvider: previousDecision!.targetProvider,
+              targetModelId: previousDecision!.targetModelId,
+              targetLabel: previousDecision!.targetLabel,
+              thinking: previousDecision!.thinking,
+              reasoning:
+                `Preserved ${previousDecision!.targetLabel} for a Google tool-result continuation ` +
+                `to avoid thought-signature replay errors. (Original: ${decision.reasoning})`,
+            };
+          }
+
           state.lastDecision = decision;
           actions.recordDebugDecision(decision);
 
@@ -281,10 +316,14 @@ export const registerRouterProvider = (
               }
 
               const thinkingOverride = actions.getThinkingOverride(model.id, decision.tier);
+              const delegatedReasoning =
+                targetModel.reasoning && (thinkingOverride ?? decision.thinking) !== 'off'
+                  ? (thinkingOverride ?? decision.thinking)
+                  : undefined;
               const delegatedStream = streamSimple(targetModel, effectiveContext, {
                 ...options,
                 apiKey,
-                reasoning: targetModel.reasoning ? (thinkingOverride ?? decision.thinking) : 'off',
+                ...(delegatedReasoning ? { reasoning: delegatedReasoning } : {}),
               });
 
               let contentReceived = false;
@@ -292,8 +331,6 @@ export const registerRouterProvider = (
                 if (event.type === 'done') {
                   const cost = event.message.usage?.cost?.total ?? 0;
                   state.accumulatedCost += cost;
-                  event.message.provider = 'router';
-                  event.message.model = model.id;
                 }
                 if (event.type === 'error' && !contentReceived) {
                   throw new Error(
