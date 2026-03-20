@@ -12,6 +12,8 @@ import type {
   RoutingRule,
 } from './types';
 
+export const ROUTER_TIERS = ['high', 'medium', 'low'] as const;
+
 export const FALLBACK_CONFIG: RouterConfig = {
   defaultProfile: 'auto',
   debug: false,
@@ -71,20 +73,16 @@ export const mergeConfig = (base: RouterConfig, override: Partial<RouterConfig>)
   const mergedProfiles: Record<string, RouterProfile> = { ...base.profiles };
   for (const [name, profile] of Object.entries(override.profiles ?? {})) {
     const existing = mergedProfiles[name];
-    mergedProfiles[name] = {
-      high: {
-        ...(existing?.high ?? FALLBACK_CONFIG.profiles.auto.high),
-        ...(profile as Partial<RouterProfile>).high,
-      },
-      medium: {
-        ...(existing?.medium ?? FALLBACK_CONFIG.profiles.auto.medium),
-        ...(profile as Partial<RouterProfile>).medium,
-      },
-      low: {
-        ...(existing?.low ?? FALLBACK_CONFIG.profiles.auto.low),
-        ...(profile as Partial<RouterProfile>).low,
-      },
-    };
+    const nextProfile = profile as Partial<RouterProfile>;
+    mergedProfiles[name] = Object.fromEntries(
+      ROUTER_TIERS.map((tier) => [
+        tier,
+        {
+          ...(existing?.[tier] ?? FALLBACK_CONFIG.profiles.auto[tier]),
+          ...nextProfile[tier],
+        },
+      ]),
+    ) as RouterProfile;
   }
   return {
     defaultProfile: override.defaultProfile ?? base.defaultProfile,
@@ -173,11 +171,12 @@ export const normalizeConfig = (raw: RouterConfig): ConfigLoadResult => {
   const fallbackAuto = FALLBACK_CONFIG.profiles.auto;
 
   for (const [name, profile] of Object.entries(raw.profiles ?? {})) {
-    normalizedProfiles[name] = {
-      high: normalizeTierConfig(profile?.high, fallbackAuto.high, name, 'high', warnings),
-      medium: normalizeTierConfig(profile?.medium, fallbackAuto.medium, name, 'medium', warnings),
-      low: normalizeTierConfig(profile?.low, fallbackAuto.low, name, 'low', warnings),
-    };
+    normalizedProfiles[name] = Object.fromEntries(
+      ROUTER_TIERS.map((tier) => [
+        tier,
+        normalizeTierConfig(profile?.[tier], fallbackAuto[tier], name, tier, warnings),
+      ]),
+    ) as RouterProfile;
   }
 
   if (Object.keys(normalizedProfiles).length === 0) {

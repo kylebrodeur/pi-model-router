@@ -42,6 +42,15 @@ const routerExtension = (pi: ExtensionAPI) => {
   let isInitialized = false;
   let isInternalModelSwitch = false;
 
+  const setModelInternally = async (model: NonNullable<ExtensionContext['model']>) => {
+    isInternalModelSwitch = true;
+    try {
+      return await pi.setModel(model);
+    } finally {
+      isInternalModelSwitch = false;
+    }
+  };
+
   const getPinnedTierForProfile = (profileName: string): RouterTier | undefined =>
     pinnedTierByProfile[profileName];
 
@@ -133,7 +142,7 @@ const routerExtension = (pi: ExtensionAPI) => {
         return;
       }
 
-      await pi.setModel(routerModel);
+      await setModelInternally(routerModel);
       ctx.ui.notify(
         `Router profile "${ctx.model.id}" is no longer configured. Switched to router/${fallbackProfile}.`,
         'warning',
@@ -158,9 +167,7 @@ const routerExtension = (pi: ExtensionAPI) => {
       if (ctx.model && ctx.model.provider !== 'router') {
         lastNonRouterModel = `${ctx.model.provider}/${ctx.model.id}`;
       }
-      isInternalModelSwitch = true;
-      const success = await pi.setModel(routerModel);
-      isInternalModelSwitch = false;
+      const success = await setModelInternally(routerModel);
       if (!success) {
         ctx.ui.notify(`Failed to switch to router/${resolvedProfile}`, 'error');
         return false;
@@ -281,9 +288,7 @@ const routerExtension = (pi: ExtensionAPI) => {
     if (routerEnabled) {
       const routerModel = ctx.modelRegistry.find('router', selectedProfile);
       if (routerModel) {
-        isInternalModelSwitch = true;
-        const success = await pi.setModel(routerModel);
-        isInternalModelSwitch = false;
+        const success = await setModelInternally(routerModel);
         if (!success) {
           ctx.ui.notify(`Failed to restore router/${selectedProfile} after relaunch.`, 'warning');
           routerEnabled = false;
@@ -376,9 +381,7 @@ const routerExtension = (pi: ExtensionAPI) => {
         (registryModel.contextWindow !== event.model.contextWindow ||
           registryModel.maxTokens !== event.model.maxTokens)
       ) {
-        isInternalModelSwitch = true;
-        await pi.setModel(registryModel);
-        isInternalModelSwitch = false;
+        await setModelInternally(registryModel);
       }
 
       routerEnabled = true;
@@ -403,9 +406,7 @@ const routerExtension = (pi: ExtensionAPI) => {
     if (routerEnabled && ctx.model?.provider !== 'router') {
       const routerModel = ctx.modelRegistry.find('router', selectedProfile);
       if (routerModel) {
-        isInternalModelSwitch = true;
-        await pi.setModel(routerModel);
-        isInternalModelSwitch = false;
+        await setModelInternally(routerModel);
       }
     }
     persistState();

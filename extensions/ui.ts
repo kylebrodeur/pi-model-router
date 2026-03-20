@@ -6,6 +6,21 @@ import type {
   RouterThinkingByProfile,
 } from './types';
 
+const getEffectiveThinking = (
+  thinkingByProfile: RouterThinkingByProfile,
+  profileName: string,
+  decision: RoutingDecision,
+) => thinkingByProfile[profileName]?.[decision.tier] ?? decision.thinking;
+
+const getDecisionFlags = (decision: RoutingDecision): string[] => {
+  const flags: string[] = [];
+  if (decision.isFallback) flags.push('fallback');
+  if (decision.isContextTriggered) flags.push('context');
+  if (decision.isBudgetForced) flags.push('budget-limit');
+  if (decision.isRuleMatched) flags.push('rule');
+  return flags;
+};
+
 export const formatDecision = (decision: RoutingDecision): string => {
   return `${decision.profile}: ${decision.tier} -> ${decision.targetProvider}/${decision.targetModelId} [${decision.thinking}] (${decision.reasoning})`;
 };
@@ -56,8 +71,11 @@ export const updateStatus = (
     const matchesPin = activePin ? lastDecision?.tier === activePin : true;
 
     if (lastDecision && matchesProfile && matchesPin) {
-      const effectiveThinking =
-        thinkingByProfile[activeRouterProfile]?.[lastDecision.tier] ?? lastDecision.thinking;
+      const effectiveThinking = getEffectiveThinking(
+        thinkingByProfile,
+        activeRouterProfile,
+        lastDecision,
+      );
       statusText = `router:${activeRouterProfile}${pinLabel} -> ${lastDecision.tier} -> ${lastDecision.targetProvider}/${lastDecision.targetModelId} (${effectiveThinking})`;
     } else {
       statusText = `router:${activeRouterProfile}${pinLabel} -> waiting`;
@@ -80,14 +98,8 @@ export const updateStatus = (
       (currentConfig.maxSessionBudget ? ` / $${currentConfig.maxSessionBudget.toFixed(2)}` : ''),
   ];
   if (lastDecision && lastDecision.profile === statusProfile) {
-    const effectiveThinking =
-      thinkingByProfile[statusProfile]?.[lastDecision.tier] ?? lastDecision.thinking;
-    const flags = [];
-    if (lastDecision.isFallback) flags.push('fallback');
-    if (lastDecision.isContextTriggered) flags.push('context');
-    if (lastDecision.isBudgetForced) flags.push('budget-limit');
-    if (lastDecision.isRuleMatched) flags.push('rule');
-
+    const effectiveThinking = getEffectiveThinking(thinkingByProfile, statusProfile, lastDecision);
+    const flags = getDecisionFlags(lastDecision);
     const flagsStr = flags.length > 0 ? ` [${flags.join(',')}]` : '';
 
     widgetLines.push(

@@ -17,7 +17,7 @@ import type {
   RouterPinByProfile,
   RouterThinkingByProfile,
 } from './types';
-import { profileNames, parseCanonicalModelRef } from './config';
+import { profileNames, parseCanonicalModelRef, ROUTER_TIERS } from './config';
 import {
   phaseForTier,
   buildRoutingDecision,
@@ -89,6 +89,26 @@ const truncateContext = (context: Context, limit: number): Context => {
   return { ...context, messages: finalMessages };
 };
 
+const supportsReasoning = (
+  profile: RouterConfig['profiles'][string],
+  modelRegistry: ExtensionContext['modelRegistry'] | undefined,
+): boolean => {
+  if (!modelRegistry) return false;
+
+  for (const tier of ROUTER_TIERS) {
+    try {
+      const { provider, modelId } = parseCanonicalModelRef(profile[tier].model);
+      if (modelRegistry.find(provider, modelId)?.reasoning) {
+        return true;
+      }
+    } catch (_error) {
+      // ignore invalid model refs here; config normalization handles warnings
+    }
+  }
+
+  return false;
+};
+
 export const registerRouterProvider = (
   pi: ExtensionAPI,
   state: {
@@ -116,11 +136,9 @@ export const registerRouterProvider = (
     const profile = state.currentConfig.profiles[name];
     let contextWindow = 1_000_000;
     let maxTokens = 64_000;
-    let anyTierSupportsReasoning = false;
 
     if (state.currentModelRegistry) {
-      const tiers: RouterTier[] = ['high', 'medium', 'low'];
-      for (const tier of tiers) {
+      for (const tier of ROUTER_TIERS) {
         try {
           const { provider, modelId } = parseCanonicalModelRef(profile[tier].model);
           const tierModel = state.currentModelRegistry.find(provider, modelId);
@@ -129,11 +147,8 @@ export const registerRouterProvider = (
               contextWindow = tierModel.contextWindow ?? contextWindow;
               maxTokens = tierModel.maxTokens ?? maxTokens;
             }
-            if (tierModel.reasoning) {
-              anyTierSupportsReasoning = true;
-            }
           }
-        } catch (e) {
+        } catch (_error) {
           // ignore
         }
       }
@@ -142,7 +157,7 @@ export const registerRouterProvider = (
     return {
       id: name,
       name: `Router ${name}`,
-      reasoning: anyTierSupportsReasoning,
+      reasoning: supportsReasoning(profile, state.currentModelRegistry),
       input: ['text', 'image'] as ('text' | 'image')[],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow,

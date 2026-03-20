@@ -11,6 +11,7 @@ import {
   resolveProfileName,
   THINKING_LEVELS,
   ROUTER_PIN_VALUES,
+  ROUTER_TIERS,
   parseCanonicalModelRef,
 } from './config';
 import { formatPinSummary, formatThinkingSummary, formatModelRef, formatDecision } from './ui';
@@ -230,7 +231,7 @@ export const registerCommands = (
       const hasTrailingSpace = /\s$/.test(prefix);
       const parts = trimmedLeft.length > 0 ? trimmedLeft.split(/\s+/) : [];
 
-      const tierValues = ['high', 'medium', 'low'];
+      const tierValues = [...ROUTER_TIERS];
       const levelValues = ['auto', ...THINKING_LEVELS];
 
       if (parts.length === 0) {
@@ -362,7 +363,7 @@ export const registerCommands = (
 
       const nextLevel = levelValue === 'auto' ? undefined : (levelValue as any);
       if (tier === 'all') {
-        for (const t of tierValues as RouterTier[]) {
+        for (const t of ROUTER_TIERS) {
           if (!state.thinkingByProfile[profileName]) state.thinkingByProfile[profileName] = {};
           if (nextLevel) state.thinkingByProfile[profileName]![t] = nextLevel;
           else delete state.thinkingByProfile[profileName]![t];
@@ -400,7 +401,7 @@ export const registerCommands = (
     },
     handler: async (args, ctx) => {
       const tier = args?.trim().toLowerCase();
-      if (!tierValues.includes(tier)) {
+      if (!ROUTER_TIERS.includes(tier as RouterTier)) {
         ctx.ui.notify('Usage: /router-fix <high|medium|low>', 'error');
         return;
       }
@@ -506,5 +507,3 @@ export const registerCommands = (
     },
   });
 };
-
-const tierValues = ['high', 'medium', 'low'];
