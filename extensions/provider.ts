@@ -24,6 +24,7 @@ import {
   decideRouting,
   runClassifier,
   extractTextFromContent,
+  hasImageAttachment,
 } from './routing';
 
 export const createErrorMessage = (model: Model<Api>, message: string): AssistantMessage => {
@@ -185,7 +186,9 @@ export const registerRouterProvider = (
       (async () => {
         try {
           if (!state.currentModelRegistry) {
-            throw new Error('Router provider not initialized yet. Wait for session_start and retry.');
+            throw new Error(
+              'Router provider not initialized yet. Wait for session_start and retry.',
+            );
           }
           const profile = state.currentConfig.profiles[model.id];
           if (!profile) {
@@ -295,10 +298,68 @@ export const registerRouterProvider = (
             };
           }
 
+          const imageAttached = hasImageAttachment(context);
+          if (imageAttached) {
+            const checkModelSupportsImage = (modelRef: string) => {
+              try {
+                const { provider, modelId } = parseCanonicalModelRef(modelRef);
+                const m = state.currentModelRegistry?.find(provider, modelId);
+                return m?.input?.includes('image') ?? false;
+              } catch {
+                return false;
+              }
+            };
+
+            const tierModels = [decision.targetLabel, ...(profile[decision.tier].fallbacks ?? [])];
+            if (!tierModels.some(checkModelSupportsImage)) {
+              const tiersToTry: RouterTier[] =
+                decision.tier === 'low'
+                  ? ['medium', 'high']
+                  : decision.tier === 'medium'
+                    ? ['high']
+                    : [];
+
+              let foundTier: RouterTier | undefined;
+              for (const t of tiersToTry) {
+                const tModels = [profile[t].model, ...(profile[t].fallbacks ?? [])];
+                if (tModels.some(checkModelSupportsImage)) {
+                  foundTier = t;
+                  break;
+                }
+              }
+
+              if (foundTier) {
+                decision = buildRoutingDecision(
+                  model.id,
+                  profile,
+                  foundTier,
+                  phaseForTier(foundTier),
+                  `Forced ${foundTier} tier because the originally routed ${decision.tier} tier does not support image attachments.`,
+                  state.thinkingByProfile[model.id],
+                  false,
+                );
+              }
+            }
+          }
+
           state.lastDecision = decision;
           actions.recordDebugDecision(decision);
 
-          const modelsToTry = [decision.targetLabel, ...(profile[decision.tier].fallbacks ?? [])];
+          let modelsToTry = [decision.targetLabel, ...(profile[decision.tier].fallbacks ?? [])];
+          if (imageAttached) {
+            modelsToTry = modelsToTry.filter((modelRef) => {
+              try {
+                const { provider, modelId } = parseCanonicalModelRef(modelRef);
+                const m = state.currentModelRegistry?.find(provider, modelId);
+                return m?.input?.includes('image') ?? false;
+              } catch {
+                return false;
+              }
+            });
+            if (modelsToTry.length === 0) {
+              modelsToTry = [decision.targetLabel];
+            }
+          }
           let lastError: any;
           let success = false;
 
@@ -317,7 +378,9 @@ export const registerRouterProvider = (
 
             const apiKey = await state.currentModelRegistry.getApiKey(targetModel);
             if (!apiKey) {
-              lastError = new Error(`No API key for routed model: ${targetProvider}/${targetModelId}`);
+              lastError = new Error(
+                `No API key for routed model: ${targetProvider}/${targetModelId}`,
+              );
               continue;
             }
 
@@ -378,7 +441,10 @@ export const registerRouterProvider = (
           stream.push({
             type: 'error',
             reason: 'error',
-            error: createErrorMessage(model, error instanceof Error ? error.message : String(error)),
+            error: createErrorMessage(
+              model,
+              error instanceof Error ? error.message : String(error),
+            ),
           });
           stream.end();
         } finally {
