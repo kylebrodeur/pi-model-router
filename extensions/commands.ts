@@ -1,8 +1,8 @@
 import type {
   ExtensionAPI,
   ExtensionContext,
-  CommandCompletionItem,
 } from '@mariozechner/pi-coding-agent';
+import type { AutocompleteItem } from '@mariozechner/pi-tui';
 import type {
   RouterConfig,
   RouterPinByProfile,
@@ -73,7 +73,7 @@ export const registerCommands = (
 
   const getSubcommandCompletions = (
     prefix: string,
-  ): CommandCompletionItem[] | null => {
+  ): AutocompleteItem[] | null => {
     const items = SUBCOMMAND_DETAILS.filter((s) =>
       s.name.startsWith(prefix),
     ).map((s) => ({
@@ -84,9 +84,7 @@ export const registerCommands = (
     return items.length > 0 ? items : null;
   };
 
-  const getPinCompletions = (
-    args: string[],
-  ): CommandCompletionItem[] | null => {
+  const getPinCompletions = (args: string[]): AutocompleteItem[] | null => {
     // pin [profile] <tier|auto>
     if (args.length <= 1) {
       const token = args[0] ?? '';
@@ -119,7 +117,7 @@ export const registerCommands = (
 
   const getThinkingCompletions = (
     args: string[],
-  ): CommandCompletionItem[] | null => {
+  ): AutocompleteItem[] | null => {
     // thinking [profile] [tier] <level|auto>
     const tierValues = [...ROUTER_TIERS];
     const levelValues = ['auto', ...THINKING_LEVELS];
@@ -143,7 +141,7 @@ export const registerCommands = (
       return null;
     }
 
-    if (tierValues.includes(args[0])) {
+    if ((tierValues as string[]).includes(args[0])) {
       const tier = args[0];
       const levelPrefix = args[1] ?? '';
       return levelValues
@@ -170,7 +168,7 @@ export const registerCommands = (
         return null;
       }
 
-      if (tierValues.includes(args[1])) {
+      if ((tierValues as string[]).includes(args[1])) {
         const tier = args[1];
         const levelPrefix = args[2] ?? '';
         return levelValues
@@ -181,6 +179,7 @@ export const registerCommands = (
 
     return null;
   };
+
 
   const handleStatus = async (args: string[], ctx: ExtensionContext) => {
     if (args.length > 0) {

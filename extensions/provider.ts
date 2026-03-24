@@ -65,25 +65,27 @@ const estimateTokens = (text: string): number => Math.ceil(text.length / 3);
  */
 const truncateContext = (context: Context, limit: number): Context => {
   const messages = [...context.messages];
-  if (messages.length <= 2) return context;
+  if (messages.length <= 1) return context;
+
+  const getSystemTokens = () =>
+    context.systemPrompt ? estimateTokens(context.systemPrompt) : 0;
 
   // Initial estimate
-  let totalTokens = messages.reduce(
-    (sum, m) => sum + estimateTokens(extractTextFromContent(m.content)),
-    0,
-  );
+  const totalTokens =
+    getSystemTokens() +
+    messages.reduce(
+      (sum, m) => sum + estimateTokens(extractTextFromContent(m.content)),
+      0,
+    );
   if (totalTokens <= limit) return context;
 
-  const systemMessage =
-    messages[0].role === 'system' ? messages.shift() : undefined;
-  const latestMessage = messages.pop()!; // The current turn
+  const latestMessage = messages.pop();
+  if (!latestMessage) return context;
 
   // Remove oldest until it fits
   while (messages.length > 0) {
     const currentTokens =
-      (systemMessage
-        ? estimateTokens(extractTextFromContent(systemMessage.content))
-        : 0) +
+      getSystemTokens() +
       estimateTokens(extractTextFromContent(latestMessage.content)) +
       messages.reduce(
         (sum, m) => sum + estimateTokens(extractTextFromContent(m.content)),
@@ -95,7 +97,6 @@ const truncateContext = (context: Context, limit: number): Context => {
   }
 
   const finalMessages: Message[] = [];
-  if (systemMessage) finalMessages.push(systemMessage);
   finalMessages.push(...messages);
   finalMessages.push(latestMessage);
 
@@ -241,14 +242,15 @@ export const registerRouterProvider = (
             try {
               const usage = await state.lastExtensionContext.getContextUsage();
               if (
-                usage.totalTokens > state.currentConfig.largeContextThreshold
+                usage?.tokens &&
+                usage.tokens > state.currentConfig.largeContextThreshold
               ) {
                 decision = buildRoutingDecision(
                   model.id,
                   profile,
                   'high',
                   'planning',
-                  `Context usage (${usage.totalTokens}) exceeds threshold (${state.currentConfig.largeContextThreshold}). Forced high tier.`,
+                  `Context usage (${usage.tokens}) exceeds threshold (${state.currentConfig.largeContextThreshold}). Forced high tier.`,
                   state.thinkingByProfile[model.id],
                   false,
                 );
@@ -465,11 +467,10 @@ export const registerRouterProvider = (
                   );
                 }
                 const isContent =
-                  event.type === 'chunk' ||
                   event.type === 'text_delta' ||
                   event.type === 'thinking_delta' ||
-                  (event.type as string) === 'tool_call_delta' ||
-                  (event.type as string) === 'toolCall';
+                  event.type === 'toolcall_delta' ||
+                  event.type === 'toolcall_end';
                 if (isContent) contentReceived = true;
                 stream.push(event);
               }

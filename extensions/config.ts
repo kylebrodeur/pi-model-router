@@ -79,15 +79,20 @@ export const mergeConfig = (
   for (const [name, profile] of Object.entries(override.profiles ?? {})) {
     const existing = mergedProfiles[name];
     const nextProfile = profile as Partial<RouterProfile>;
-    mergedProfiles[name] = Object.fromEntries(
-      ROUTER_TIERS.map((tier) => [
-        tier,
-        {
-          ...(existing?.[tier] ?? FALLBACK_CONFIG.profiles.auto[tier]),
-          ...nextProfile[tier],
-        },
-      ]),
-    ) as RouterProfile;
+    mergedProfiles[name] = {
+      high: {
+        ...(existing?.high ?? FALLBACK_CONFIG.profiles.auto.high),
+        ...(nextProfile.high ?? {}),
+      },
+      medium: {
+        ...(existing?.medium ?? FALLBACK_CONFIG.profiles.auto.medium),
+        ...(nextProfile.medium ?? {}),
+      },
+      low: {
+        ...(existing?.low ?? FALLBACK_CONFIG.profiles.auto.low),
+        ...(nextProfile.low ?? {}),
+      },
+    };
   }
   return {
     defaultProfile: override.defaultProfile ?? base.defaultProfile,
@@ -185,18 +190,29 @@ export const normalizeConfig = (raw: RouterConfig): ConfigLoadResult => {
   const fallbackAuto = FALLBACK_CONFIG.profiles.auto;
 
   for (const [name, profile] of Object.entries(raw.profiles ?? {})) {
-    normalizedProfiles[name] = Object.fromEntries(
-      ROUTER_TIERS.map((tier) => [
-        tier,
-        normalizeTierConfig(
-          profile?.[tier],
-          fallbackAuto[tier],
-          name,
-          tier,
-          warnings,
-        ),
-      ]),
-    ) as RouterProfile;
+    normalizedProfiles[name] = {
+      high: normalizeTierConfig(
+        profile?.high,
+        fallbackAuto.high,
+        name,
+        'high',
+        warnings,
+      ),
+      medium: normalizeTierConfig(
+        profile?.medium,
+        fallbackAuto.medium,
+        name,
+        'medium',
+        warnings,
+      ),
+      low: normalizeTierConfig(
+        profile?.low,
+        fallbackAuto.low,
+        name,
+        'low',
+        warnings,
+      ),
+    };
   }
 
   if (Object.keys(normalizedProfiles).length === 0) {

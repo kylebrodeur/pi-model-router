@@ -376,18 +376,13 @@ ${currentPhase === 'implementation' ? 'Consider that the conversation is current
 
     const classifierContext: Context = {
       ...context,
-      messages: [{ role: 'user', content: classifierPrompt }],
+      messages: [{ role: 'user', content: classifierPrompt, timestamp: Date.now() }],
     };
 
     const stream = streamSimple(model, classifierContext, { apiKey });
     let fullText = '';
     for await (const event of stream) {
       if (
-        event.type === 'chunk' &&
-        typeof (event as any).content === 'string'
-      ) {
-        fullText += (event as any).content;
-      } else if (
         event.type === 'text_delta' &&
         typeof (event as any).delta === 'string'
       ) {
