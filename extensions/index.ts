@@ -442,14 +442,6 @@ const routerExtension = (pi: ExtensionAPI) => {
     actions.updateStatus(ctx);
   });
 
-  pi.on('session_switch', async (_event, ctx) => {
-    await restoreStateFromSession(ctx);
-  });
-
-  pi.on('session_fork', async (_event, ctx) => {
-    await restoreStateFromSession(ctx);
-  });
-
   pi.on('turn_end', async (_event, ctx) => {
     if (routerEnabled && ctx.model?.provider !== 'router') {
       const routerModel = ctx.modelRegistry.find('router', selectedProfile);
