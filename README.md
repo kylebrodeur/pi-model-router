@@ -1,20 +1,21 @@
 # pi-model-router
 
-Modular, extension-first model router for the [pi](https://github.com/mariozechner/pi-coding-agent) coding agent.
+Intelligent per-turn model router extension for the [pi](https://github.com/mariozechner/pi-coding-agent) coding agent. Automatically selects between high, medium, and low-tier LLMs based on task intent, session budget, context size, and custom rules — with automatic fallbacks and phase awareness.
 
 ## What it does
 
 - **Logical Router Provider**: Registers a `router` provider that exposes stable profiles (e.g., `router/auto`) as models.
-- **Per-Turn Routing**: Intelligently chooses between `high`, `medium`, and `low` tiers for every single turn based on task complexity.
+- **Per-Turn Routing**: Intelligently chooses between `high`, `medium`, and `low` tiers for every turn based on task intent and complexity.
+- **Task-Aware Heuristics**: Detects planning vs. implementation vs. lightweight tasks using keyword analysis, word count, and conversation history.
 - **Advanced Controls**: Includes built-in support for:
-  - **LLM Intent Classifier**: Use a fast model to categorize your requests.
-  - **Custom Rules**: Define keyword-based overrides for specific tasks.
-  - **Context Trigger**: Automatically upgrade to high-reasoning models for large context tasks.
-  - **Cost Budgeting**: Set a session spend limit; once reached, the router stays in lower-cost tiers.
+  - **LLM Intent Classifier**: Optionally use a fast model to categorize intent (overrides heuristics).
+  - **Custom Rules**: Define keyword-based tier overrides for specific patterns (e.g., `deploy` → `high`).
+  - **Context Trigger**: Automatically upgrade to high-tier when token usage exceeds a threshold.
+  - **Cost Budgeting**: Set a session spend limit; high tier downgrades to medium once exceeded.
   - **Fallback Chains**: Automatic retry with alternative models if the primary choice fails.
-- **Phase Memory**: Biased stickiness to keep you in the same tier during multi-turn planning or implementation.
-- **Thinking Control**: Full control over thinking/reasoning levels per tier.
-- **Persistent State**: Pins, profiles, and costs are remembered across agent restarts and conversation branches.
+- **Phase Memory**: Biased stickiness to keep you in the same tier during multi-turn planning or implementation work.
+- **Thinking Control**: Full control over reasoning/thinking levels per tier and profile.
+- **Persistent State**: Pins, profiles, costs, and debug history are remembered across agent restarts and conversation branches.
 
 ## Installation
 
