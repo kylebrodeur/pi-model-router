@@ -1,5 +1,47 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 
+// ─── Feature Toggles (added by fork) ──────────────────────────────────────
+
+export type RouterFeature =
+  | 'ollamaSync'
+  | 'rateLimitFallback'
+  | 'perTurnRouting'
+  | 'intentClassifier'
+  | 'costBudgeting'
+  | 'phaseMemory';
+
+export interface FeatureToggles {
+  ollamaSync?: boolean;
+  rateLimitFallback?: boolean;
+  perTurnRouting?: boolean;
+  intentClassifier?: boolean;
+  costBudgeting?: boolean;
+  phaseMemory?: boolean;
+}
+
+export interface OllamaSyncConfig {
+  enabled?: boolean;
+  onStartup?: boolean;
+  onReload?: boolean;
+  addLaunchFlag?: boolean;
+  visionKeywords?: string[];
+  reasoningKeywords?: string[];
+  preferredFamilies?: string[];
+  defaultContextWindow?: number;
+  largeContextWindow?: number;
+}
+
+export interface RateLimitFallbackConfig {
+  enabled?: boolean;
+  shortDelayThreshold?: number;
+  autoFallback?: boolean;
+  autoRestore?: boolean;
+  restoreCheckInterval?: number;
+  preferredLocalModels?: string[];
+}
+
+// ─── Original Router Types ─────────────────────────────────────────────────
+
 export type RouterTier = 'high' | 'medium' | 'low';
 export type RouterPin = RouterTier | 'auto';
 export type RouterPhase = 'planning' | 'implementation' | 'lightweight';
@@ -34,6 +76,10 @@ export interface RouterConfig {
   maxSessionBudget?: number;
   rules?: RoutingRule[];
   profiles: Record<string, RouterProfile>;
+  // ─── Feature toggles (added by fork) ──────────────────────────────
+  features?: FeatureToggles;
+  ollamaSync?: OllamaSyncConfig;
+  rateLimitFallback?: RateLimitFallbackConfig;
 }
 
 export interface RoutingDecision {
