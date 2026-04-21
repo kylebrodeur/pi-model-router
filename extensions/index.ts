@@ -23,6 +23,37 @@ import { isRouterPersistedState, buildPersistedState } from './state';
 import { updateStatus, formatModelRef } from './ui';
 import { registerCommands } from './commands';
 import { registerRouterProvider } from './provider';
+// ─── Feature modules (added by fork) ────────────────────────────────────────
+import { initializeRateLimitFallback } from './rate-limit';
+
+export interface RouterExtensionState {
+  routerEnabled: boolean;
+  selectedProfile: string;
+  pinnedTierByProfile: RouterPinByProfile;
+  thinkingByProfile: RouterThinkingByProfile;
+  accumulatedCost: number;
+  lastDecision: RoutingDecision | undefined;
+  lastNonRouterModel: string | undefined;
+  debugEnabled: boolean;
+  widgetEnabled: boolean;
+  debugHistory: RoutingDecision[];
+}
+
+export interface RouterExtensionActions {
+  switchToRouterProfile: (
+    profileName: string,
+    ctx: ExtensionContext,
+    strict?: boolean,
+  ) => Promise<boolean>;
+  reloadConfig: (
+    ctx?: ExtensionContext,
+    options?: { preserveDebug?: boolean },
+  ) => void;
+  ensureValidActiveRouterProfile: (ctx: ExtensionContext) => Promise<void>;
+  updateStatus: (ctx: ExtensionContext) => void;
+  persistState: () => void;
+  syncFeatures: () => void;
+}
 
 const routerExtension = (pi: ExtensionAPI) => {
   let currentConfig: RouterConfig = FALLBACK_CONFIG;
@@ -264,6 +295,24 @@ const routerExtension = (pi: ExtensionAPI) => {
     },
   };
 
+  // ─── Feature sync (added by fork) ───────────────────────────────────────
+  const syncFeatures = () => {
+    const ctx = lastExtensionContext;
+    const features = currentConfig.features;
+
+    // Rate limit fallback
+    const shouldInitRateLimit =
+      !features || features.rateLimitFallback !== false; // enabled by default
+    if (shouldInitRateLimit) {
+      initializeRateLimitFallback(
+        pi,
+        (currentConfig.rateLimitFallback as Record<string, unknown>) ?? {},
+      );
+    }
+
+    console.log('[router] Feature sync complete - rate-limit:', shouldInitRateLimit);
+  };
+
   actions.reloadConfig();
 
   const restoreStateFromSession = async (ctx: ExtensionContext) => {
@@ -407,6 +456,10 @@ const routerExtension = (pi: ExtensionAPI) => {
   pi.on('session_start', async (_event, ctx) => {
     isInitialized = true;
     await restoreStateFromSession(ctx);
+
+    // ─── Initialize features after state restore (added by fork) ─────
+    syncFeatures();
+
     if (debugEnabled) {
       ctx.ui.notify(
         `Router initialized with profiles: ${profileNames(currentConfig).join(', ')}`,
