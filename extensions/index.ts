@@ -308,17 +308,6 @@ const routerExtension = (pi: ExtensionAPI) => {
       initializeOllamaSync(
         pi,
         (currentConfig.ollamaSync ?? {}) as Record<string, unknown>,
-        {
-          routerEnabled,
-          selectedProfile,
-          accumulatedCost,
-          lastNonRouterModel,
-          debugEnabled,
-        },
-        {
-          persistState,
-          syncFeatures,
-        },
       );
     }
 

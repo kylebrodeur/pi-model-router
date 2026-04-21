@@ -2,12 +2,11 @@
  * Rate Limit Fallback Feature
  *
  * Monitors provider responses for rate limiting.
- * NOTE: Requires Pi update to 0.67+ for after_provider_response event support.
+ * NOTE: Requires Pi 0.67+ for after_provider_response event.
  */
 import type {
   ExtensionAPI,
   ExtensionContext,
-  ExtensionCommandContext,
 } from '@mariozechner/pi-coding-agent';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -29,7 +28,7 @@ export interface RateLimitEventEntry {
   httpStatus: number;
 }
 
-export interface FallbackStateEntry {
+export interface FallbackState {
   preferredModel?: string;
   fallbackActive: boolean;
   autoRestore: boolean;
@@ -37,9 +36,9 @@ export interface FallbackStateEntry {
   triggerReason?: 'rate_limit' | 'budget_exceeded' | 'manual';
 }
 
-// ─── Defaults ───────────────────────────────────────────────────────────────
+// ─── Config ─────────────────────────────────────────────────────────────────
 
-const CONFIG_DEFAULTS: RateLimitConfig = {
+export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   enabled: true,
   shortDelayThreshold: 60,
   autoFallback: false,
@@ -50,20 +49,27 @@ const CONFIG_DEFAULTS: RateLimitConfig = {
 
 // ─── Module State ───────────────────────────────────────────────────────────
 
-let fallbackState: FallbackStateEntry = { fallbackActive: false, autoRestore: false };
-let rateLimitHistory: RateLimitEventEntry[] = [];
+let state: FallbackState = {
+  fallbackActive: false,
+  autoRestore: false,
+};
+
+let history: RateLimitEventEntry[] = [];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function getModelsJsonPath(): string {
-  return process.env.HOME ? `${process.env.HOME}/.pi/agent/models.json` : '/.pi/agent/models.json';
+  return process.env.HOME
+    ? `${process.env.HOME}/.pi/agent/models.json`
+    : '/.pi/agent/models.json';
 }
 
 function findBestOllamaModel(preferred: string[]): string | undefined {
   try {
     const fs = require('node:fs');
     const data = JSON.parse(fs.readFileSync(getModelsJsonPath(), 'utf-8'));
-    const models: Array<{ id: string; _launch?: boolean }> = data?.providers?.ollama?.models || [];
+    const models: Array<{ id: string; _launch?: boolean }> =
+      data?.providers?.ollama?.models || [];
     if (models.length === 0) return undefined;
 
     for (const pref of preferred) {
@@ -71,136 +77,189 @@ function findBestOllamaModel(preferred: string[]): string | undefined {
       const match = models.find((m) => m.id.startsWith(pref));
       if (match) return match.id;
     }
+
     return models.find((m) => m._launch)?.id || models[0]?.id;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
-// ─── Core Logic ─────────────────────────────────────────────────────────────
+// ─── Public API ─────────────────────────────────────────────────────────────
 
 export async function tryFallback(
   pi: ExtensionAPI,
-  ctx: ExtensionContext | ExtensionCommandContext,
-  _config: RateLimitConfig,
-  triggerReason: FallbackStateEntry['triggerReason'],
+  ctx: ExtensionContext,
+  config: RateLimitConfig,
+  triggerReason: FallbackState['triggerReason'] = 'manual',
 ): Promise<{ success: boolean; message: string }> {
-  const extCtx = 'model' in ctx ? ctx : (ctx as ExtensionContext);
-  const currentModel = extCtx.model;
+  const currentModel = ctx.model;
 
-  if (!currentModel) return { success: false, message: 'No current model' };
-  if (currentModel.provider !== 'ollama' && !fallbackState.fallbackActive) {
-    fallbackState.preferredModel = `${currentModel.provider}/${currentModel.id}`;
+  if (!currentModel) {
+    return { success: false, message: 'No current model' };
   }
 
-  const targetId = findBestOllamaModel(_config.preferredLocalModels.length > 0 ? _config.preferredLocalModels : []);
-  if (!targetId) return { success: false, message: 'No Ollama models available' };
+  if (currentModel.provider !== 'ollama' && !state.fallbackActive) {
+    state.preferredModel = `${currentModel.provider}/${currentModel.id}`;
+  }
 
-  const modelReg = 'modelRegistry' in ctx ? ctx.modelRegistry : undefined;
-  const targetModel = modelReg?.find('ollama', targetId);
-  if (!targetModel) return { success: false, message: `Ollama ${targetId} not in registry. Try /reload.` };
+  const targetId = findBestOllamaModel(
+    config.preferredLocalModels.length > 0
+      ? config.preferredLocalModels
+      : [],
+  );
+
+  if (!targetId) {
+    return { success: false, message: 'No Ollama models available' };
+  }
+
+  const targetModel = ctx.modelRegistry.find('ollama', targetId);
+  if (!targetModel) {
+    return {
+      success: false,
+      message: `Ollama ${targetId} not in registry. Try /reload.`,
+    };
+  }
 
   const success = await pi.setModel(targetModel);
   if (success) {
-    fallbackState.fallbackActive = true;
-    fallbackState.autoRestore = _config.autoRestore;
-    fallbackState.triggeredAt = Date.now();
-    fallbackState.triggerReason = triggerReason;
+    state.fallbackActive = true;
+    state.autoRestore = config.autoRestore;
+    state.triggeredAt = Date.now();
+    state.triggerReason = triggerReason;
   }
-  return { success, message: success ? `Switched to Ollama ${targetId}` : 'Failed to switch to Ollama' };
+
+  return {
+    success,
+    message: success
+      ? `Switched to Ollama ${targetId}`
+      : 'Failed to switch to Ollama',
+  };
 }
 
 export async function tryRestore(
   pi: ExtensionAPI,
-  ctx: ExtensionContext | ExtensionCommandContext,
+  ctx: ExtensionContext,
 ): Promise<{ success: boolean; message: string }> {
-  if (!fallbackState.fallbackActive || !fallbackState.preferredModel) {
+  if (!state.fallbackActive || !state.preferredModel) {
     return { success: false, message: 'No preferred model stored' };
   }
-  const [provider, id] = fallbackState.preferredModel.split('/');
-  const modelReg = 'modelRegistry' in ctx ? ctx.modelRegistry : undefined;
-  const model = modelReg?.find(provider, id);
-  if (!model) return { success: false, message: `Model ${fallbackState.preferredModel} not available` };
+
+  const [provider, id] = state.preferredModel.split('/');
+  const model = ctx.modelRegistry.find(provider, id);
+
+  if (!model) {
+    return {
+      success: false,
+      message: `Model ${state.preferredModel} not available`,
+    };
+  }
 
   const success = await pi.setModel(model);
-  if (success) { fallbackState.fallbackActive = false; fallbackState.autoRestore = false; }
-  return { success, message: success ? `Restored ${fallbackState.preferredModel}` : 'Failed to restore model' };
+  if (success) {
+    state.fallbackActive = false;
+    state.autoRestore = false;
+  }
+
+  return {
+    success,
+    message: success
+      ? `Restored ${state.preferredModel}`
+      : 'Failed to restore model',
+  };
 }
 
-// ─── Initialization ─────────────────────────────────────────────────────────
+export function getFallbackState(): FallbackState {
+  return { ...state };
+}
+
+export function getRateLimitHistory(): RateLimitEventEntry[] {
+  return [...history];
+}
+
+export function recordRateLimit(
+  provider: string,
+  model: string,
+  httpStatus: number,
+  retryAfter?: number,
+): void {
+  history.push({
+    timestamp: Date.now(),
+    provider,
+    model,
+    retryAfter,
+    httpStatus,
+  });
+  // Keep last 100
+  if (history.length > 100) history = history.slice(-100);
+}
+
+export function resetRateLimitState(): void {
+  state = {
+    fallbackActive: false,
+    autoRestore: false,
+  };
+  history = [];
+}
+
+// ─── Extension Integration ──────────────────────────────────────────────────
 
 export function initializeRateLimitFallback(
   pi: ExtensionAPI,
   rawConfig: Record<string, unknown>,
 ): void {
-  const config = { ...CONFIG_DEFAULTS, ...rawConfig };
-  if (!config.enabled) { console.log('[router] rate-limit-fallback: disabled'); return; }
+  const config = { ...DEFAULT_RATE_LIMIT_CONFIG };
+  for (const key of Object.keys(config) as Array<keyof typeof config>) {
+    if (rawConfig[key] !== undefined) config[key] = rawConfig[key] as never;
+  }
 
-  // Monitor rate limits (Pi 0.67+ required for after_provider_response)
-  // @ts-expect-error — after_provider_response available in Pi 0.67+
+  if (!config.enabled) {
+    console.log('[router] rate-limit-fallback: disabled');
+    return;
+  }
+
+  // Monitor rate limits (Pi 0.67+)
+  // @ts-expect-error — after_provider_response in Pi 0.67+
   pi.on('after_provider_response', async (event, ctx) => {
     if (event.status !== 429 && event.status !== 503) return;
 
-    const currentModel = ctx.model.getCurrentModel();
-    const retryAfter = parseInt(String(event.headers?.['retry-after'] || '0'), 10);
+    const currentModel = ctx.model;
+    const retryAfter = parseInt(
+      String(event.headers?.['retry-after'] || '0'),
+      10,
+    );
 
-    rateLimitHistory.push({
-      timestamp: Date.now(),
-      provider: currentModel?.provider || 'unknown',
-      model: currentModel?.id || 'unknown',
-      retryAfter: retryAfter || undefined,
-      httpStatus: event.status,
-    });
+    recordRateLimit(
+      currentModel?.provider || 'unknown',
+      currentModel?.id || 'unknown',
+      event.status,
+      retryAfter || undefined,
+    );
 
     if (retryAfter > 0 && retryAfter < config.shortDelayThreshold) {
-      ctx.ui.notify(`[Router] Rate limited. Retry after ${retryAfter}s`, 'warning');
-    } else if (config.autoFallback && !fallbackState.fallbackActive) {
+      ctx.ui.notify(
+        `[Router] Rate limited. Retry after ${retryAfter}s`,
+        'warning',
+      );
+    } else if (config.autoFallback && !state.fallbackActive) {
       const result = await tryFallback(pi, ctx, config, 'rate_limit');
-      if (result.success) ctx.ui.notify(`[Router] Auto-fallback: ${result.message}`, 'info');
-    } else {
-      ctx.ui.notify('[Router] Rate limited. Use /router-fallback to switch to Ollama', 'warning');
-    }
-  });
-
-  // Commands
-  pi.registerCommand('router-fallback', {
-    description: 'Switch to Ollama model (fallback)',
-    handler: async (_args, ctx) => {
-      if (fallbackState.fallbackActive) { ctx.ui.notify('Fallback already active', 'warning'); return; }
-      const result = await tryFallback(pi, ctx, config, 'manual');
-      ctx.ui.notify(result.message, result.success ? 'info' : 'error');
-    },
-  });
-
-  pi.registerCommand('router-restore', {
-    description: 'Restore original model after fallback',
-    handler: async (_args, ctx) => {
-      if (!fallbackState.fallbackActive) { ctx.ui.notify('No active fallback', 'warning'); return; }
-      const result = await tryRestore(pi, ctx);
-      ctx.ui.notify(result.message, result.success ? 'info' : 'error');
-    },
-  });
-
-  pi.registerCommand('router-rate-limit-status', {
-    description: 'Show rate limit history and fallback status',
-    handler: async (_args, ctx) => {
-      const lines = [
-        'Rate Limit Status',
-        `  Fallback active: ${fallbackState.fallbackActive ? 'YES' : 'no'}`,
-        `  Preferred: ${fallbackState.preferredModel || '—'}`,
-        `  Events this session: ${rateLimitHistory.length}`,
-      ];
-      if (rateLimitHistory.length > 0) {
-        const last = rateLimitHistory[rateLimitHistory.length - 1];
-        lines.push(`  Last: ${last.provider}/${last.model}`);
-        if (last.retryAfter) lines.push(`  Retry-after: ${last.retryAfter}s`);
+      if (result.success) {
+        ctx.ui.notify(`[Router] Auto-fallback: ${result.message}`, 'info');
       }
-      ctx.ui.notify(lines.join('\n'), 'info');
-    },
+    } else {
+      ctx.ui.notify(
+        '[Router] Rate limited. Use /router fallback to switch to Ollama',
+        'warning',
+      );
+    }
   });
 
   // Status bar indicator
   pi.on('model_select', async (_event, ctx) => {
-    if (fallbackState.fallbackActive) ctx.ui.setStatus('router-fallback', '🏠 fallback');
-    else ctx.ui.setStatus('router-fallback', '');
+    if (state.fallbackActive) {
+      ctx.ui.setStatus('router-fallback', '\ud83c\udfe0 fallback');
+    } else {
+      ctx.ui.setStatus('router-fallback', '');
+    }
   });
 
   console.log('[router] rate-limit-fallback: enabled');

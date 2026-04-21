@@ -24,6 +24,8 @@ import {
   formatModelRef,
   formatDecision,
 } from './ui';
+import { performOllamaSync } from './ollama-sync';
+import { tryFallback, tryRestore, getFallbackState, getRateLimitHistory } from './rate-limit';
 
 export const registerCommands = (
   pi: ExtensionAPI,
@@ -57,14 +59,15 @@ export const registerCommands = (
 ) => {
   const SUBCOMMAND_DETAILS = [
     { name: 'status', desc: 'Show current router status' },
+    { name: 'config', desc: 'Show or toggle feature configuration' },
+    { name: 'ollama-sync', desc: 'Sync Ollama models to models.json' },
+    { name: 'fallback', desc: 'Switch to Ollama fallback model' },
+    { name: 'restore', desc: 'Restore original model after fallback' },
     { name: 'profile', desc: 'Switch to a different router profile' },
     { name: 'pin', desc: 'Pin routing for a profile to a specific tier' },
     { name: 'thinking', desc: 'Override thinking level for a tier or profile' },
     { name: 'disable', desc: 'Disable the router and restore last model' },
-    {
-      name: 'fix',
-      desc: 'Correct the last routing decision and pin that tier',
-    },
+    { name: 'fix', desc: 'Correct the last routing decision and pin that tier' },
     { name: 'widget', desc: 'Toggle the router status widget' },
     { name: 'debug', desc: 'Toggle or clear router debug history' },
     { name: 'reload', desc: 'Reload the model router configuration' },
@@ -205,6 +208,10 @@ export const registerCommands = (
       `Last non-router model: ${formatModelRef(state.lastNonRouterModel)}`,
       `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
       `Debug history: ${state.debugHistory.length} decisions`,
+      // ─── Fallback state (added by fork) ─────────────────────────────────
+      `Fallback: ${getFallbackState().fallbackActive ? 'active 🏠' : 'inactive'}`,
+      `Rate limit events: ${getRateLimitHistory().length}`,
+      `Features: ollamaSync=${state.currentConfig.features?.ollamaSync !== false ? 'on' : 'off'} rateLimit=${state.currentConfig.features?.rateLimitFallback !== false ? 'on' : 'off'}`,
     ];
     if (state.lastDecision) {
       lines.push(
@@ -542,6 +549,104 @@ export const registerCommands = (
     );
   };
 
+  // ─── New subcommand handlers (added by fork) ─────────────────────────────
+
+  const handleOllamaSync = async (args: string[], ctx: ExtensionContext) => {
+    if (args.length > 0) {
+      ctx.ui.notify('Usage: /router ollama-sync (no arguments)', 'error');
+      return;
+    }
+    const result = await performOllamaSync(
+      pi,
+      state.currentConfig.ollamaSync as Record<string, unknown> ?? {},
+    );
+    if (result.success && result.added.length > 0) {
+      ctx.ui.notify(`Added: ${result.added.join(', ')}`, 'info');
+      ctx.ui.notify('Run /reload to see them', 'info');
+    } else if (result.success) {
+      ctx.ui.notify(result.message, 'info');
+    } else {
+      ctx.ui.notify(result.message, 'error');
+    }
+  };
+
+  const handleFallback = async (args: string[], ctx: ExtensionContext) => {
+    if (args.length > 0) {
+      ctx.ui.notify('Usage: /router fallback (no arguments)', 'error');
+      return;
+    }
+    const fbState = getFallbackState();
+    if (fbState.fallbackActive) {
+      ctx.ui.notify('Fallback already active', 'warning');
+      return;
+    }
+    const config = state.currentConfig.rateLimitFallback as Record<string, unknown> ?? {};
+    const result = await tryFallback(pi, ctx, config as never, 'manual');
+    ctx.ui.notify(result.message, result.success ? 'info' : 'error');
+    actions.persistState();
+  };
+
+  const handleRestore = async (args: string[], ctx: ExtensionContext) => {
+    if (args.length > 0) {
+      ctx.ui.notify('Usage: /router restore (no arguments)', 'error');
+      return;
+    }
+    const fbState = getFallbackState();
+    if (!fbState.fallbackActive) {
+      ctx.ui.notify('No active fallback to restore from', 'warning');
+      return;
+    }
+    const result = await tryRestore(pi, ctx);
+    ctx.ui.notify(result.message, result.success ? 'info' : 'error');
+    actions.persistState();
+  };
+
+  const handleConfig = async (args: string[], ctx: ExtensionContext) => {
+    if (args.length === 0) {
+      const lines = [
+        'Router Feature Configuration',
+        `  ollamaSync: ${state.currentConfig.features?.ollamaSync !== false ? 'enabled' : 'disabled'}`,
+        `  rateLimitFallback: ${state.currentConfig.features?.rateLimitFallback !== false ? 'enabled' : 'disabled'}`,
+        '  perTurnRouting: (always active)',
+        `  intentClassifier: ${state.currentConfig.features?.intentClassifier ? 'enabled' : 'disabled'}`,
+        `  costBudgeting: ${state.currentConfig.features?.costBudgeting !== false ? 'enabled' : 'disabled'}`,
+        `  phaseMemory: ${state.currentConfig.features?.phaseMemory !== false ? 'enabled' : 'disabled'}`,
+        '',
+        'Usage: /router config <feature> to toggle',
+      ];
+      ctx.ui.notify(lines.join('\n'), 'info');
+      return;
+    }
+
+    const feature = args[0];
+    if (!state.currentConfig.features) {
+      state.currentConfig.features = {};
+    }
+
+    switch (feature) {
+      case 'ollama-sync':
+        state.currentConfig.features.ollamaSync = !state.currentConfig.features.ollamaSync;
+        ctx.ui.notify(`ollamaSync: ${state.currentConfig.features.ollamaSync ? 'enabled' : 'disabled'}`, 'info');
+        break;
+      case 'rate-limit':
+        state.currentConfig.features.rateLimitFallback = !state.currentConfig.features.rateLimitFallback;
+        ctx.ui.notify(`rateLimitFallback: ${state.currentConfig.features.rateLimitFallback ? 'enabled' : 'disabled'}`, 'info');
+        break;
+      case 'classifier':
+        state.currentConfig.features.intentClassifier = !state.currentConfig.features.intentClassifier;
+        ctx.ui.notify(`intentClassifier: ${state.currentConfig.features.intentClassifier ? 'enabled' : 'disabled'}`, 'info');
+        break;
+      case 'budget':
+        state.currentConfig.features.costBudgeting = !state.currentConfig.features.costBudgeting;
+        ctx.ui.notify(`costBudgeting: ${state.currentConfig.features.costBudgeting ? 'enabled' : 'disabled'}`, 'info');
+        break;
+      default:
+        ctx.ui.notify(`Unknown feature: ${feature}. Try: ollama-sync, rate-limit, classifier, budget`, 'error');
+        return;
+    }
+    actions.persistState();
+  };
+
   pi.registerCommand('router', {
     description: 'Model router control center',
     getArgumentCompletions: (prefix) => {
@@ -617,6 +722,21 @@ export const registerCommands = (
             }));
           return items.length > 0 ? items : null;
         }
+        case 'config': {
+          const configPrefix = subArgs[0] ?? '';
+          const items = ['status', 'ollama-sync', 'rate-limit']
+            .filter((v) => v.startsWith(configPrefix))
+            .map((v) => ({
+              value: `config ${v}`,
+              label: v,
+              description: `Config: ${v}`,
+            }));
+          return items.length > 0 ? items : null;
+        }
+        case 'ollama-sync':
+        case 'fallback':
+        case 'restore':
+          return null;
         case 'debug': {
           const debugPrefix = subArgs[0] ?? '';
           const items = ['on', 'off', 'toggle', 'clear', 'show']
@@ -656,6 +776,18 @@ export const registerCommands = (
         case 'widget':
           await handleWidget(subArgs, ctx);
           break;
+        case 'config':
+          await handleConfig(subArgs, ctx);
+          break;
+        case 'ollama-sync':
+          await handleOllamaSync(subArgs, ctx);
+          break;
+        case 'fallback':
+          await handleFallback(subArgs, ctx);
+          break;
+        case 'restore':
+          await handleRestore(subArgs, ctx);
+          break;
         case 'debug':
           await handleDebug(subArgs, ctx);
           break;
@@ -675,6 +807,10 @@ export const registerCommands = (
             [
               'Router Subcommands:',
               '  status                      Show current status, profile, pin, cost, and last decision.',
+              '  config [feature]            Show or toggle features (ollama-sync, rate-limit, classifier, budget).',
+              '  ollama-sync                 Sync new Ollama models to models.json.',
+              '  fallback                    Switch to an Ollama model manually.',
+              '  restore                     Restore the original model after fallback.',
               '  profile [name]              Switch to a profile (enables router if off). Lists available if no name.',
               '  pin [profile] <tier|auto>   Force a tier (high|medium|low) for a profile or set to auto.',
               '  thinking [prof] [tier] <lv> Override thinking level for a profile/tier (off|minimal|...|xhigh|auto).',
