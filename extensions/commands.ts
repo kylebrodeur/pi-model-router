@@ -733,6 +733,7 @@ export const registerCommands = (
         `  intentClassifier: ${state.currentConfig.features?.intentClassifier ? 'enabled' : 'disabled'}`,
         `  costBudgeting: ${state.currentConfig.features?.costBudgeting !== false ? 'enabled' : 'disabled'}`,
         `  contextCompression: ${state.currentConfig.features?.contextCompression === true ? 'enabled' : 'disabled'}`,
+        `  respectPiScope: ${state.currentConfig.features?.respectPiScope ? 'enabled' : 'disabled'}`,
         '',
         'Usage: /router config <feature> to toggle',
       ];
@@ -778,9 +779,17 @@ export const registerCommands = (
           'info',
         );
         break;
+      case 'respect-pi-scope':
+        state.currentConfig.features.respectPiScope =
+          !state.currentConfig.features.respectPiScope;
+        ctx.ui.notify(
+          `respectPiScope: ${state.currentConfig.features.respectPiScope ? 'enabled' : 'disabled'}`,
+          'info',
+        );
+        break;
       default:
         ctx.ui.notify(
-          `Unknown feature: ${feature}. Try: ollama-sync, rate-limit, classifier, budget`,
+          `Unknown feature: ${feature}. Try: ollama-sync, rate-limit, classifier, budget, respect-pi-scope`,
           'error',
         );
         return;
@@ -901,7 +910,14 @@ export const registerCommands = (
         }
         case 'config': {
           const configPrefix = subArgs[0] ?? '';
-          const items = ['status', 'ollama-sync', 'rate-limit']
+          const items = [
+            'status',
+            'ollama-sync',
+            'rate-limit',
+            'classifier',
+            'budget',
+            'respect-pi-scope',
+          ]
             .filter((v) => v.startsWith(configPrefix))
             .map((v) => ({
               value: `config ${v}`,

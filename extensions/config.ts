@@ -191,9 +191,9 @@ export const normalizeTierConfig = (
         try {
           parseCanonicalModelRef(f);
           if (enabledModelsScope && !enabledModelsScope.includes(f)) {
-             warnings.push(
-               `[Scope Violation] Profile "${profileName}" ${tier} tier fallback '${f}' is not in Pi's enabledModels.`
-             );
+            warnings.push(
+              `[Scope Violation] Profile "${profileName}" ${tier} tier fallback '${f}' is not in Pi's enabledModels.`,
+            );
           }
           fallbacks.push(f);
         } catch (error) {

@@ -395,17 +395,17 @@ export const registerRouterProvider = (
               }
             });
             if (modelsToTry.length === 0) {
-               stream.push({
-                 type: 'error',
-                 reason: 'error',
-                 error: createErrorMessage(
-                   model,
-                   `[Scope Violation] No enabled models available for tier '${decision.tier}' under Pi's strict scope constraint.`
-                 ),
-               });
-               stream.end();
-               actions.persistState();
-               return stream;
+              stream.push({
+                type: 'error',
+                reason: 'error',
+                error: createErrorMessage(
+                  model,
+                  `[Scope Violation] No enabled models available for tier '${decision.tier}' under Pi's strict scope constraint.`,
+                ),
+              });
+              stream.end();
+              actions.persistState();
+              return stream;
             }
           }
 
