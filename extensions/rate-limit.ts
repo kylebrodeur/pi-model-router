@@ -213,7 +213,13 @@ export const initializeRateLimitFallback = (
 
   // Monitor rate limits (requires Pi 0.68+)
   pi.on('after_provider_response', async (event, ctx) => {
-    if (event.status !== 429 && event.status !== 503) return;
+    // 402: Payment Required (Out of credits)
+    // 429: Too Many Requests (Rate limit)
+    // 503: Service Unavailable
+    // 529: Site Overloaded (Anthropic specifically)
+    // Note: We intentionally ignore 401/403 to avoid silently masking bad API keys.
+    const fallbackTriggers = [402, 429, 503, 529];
+    if (!fallbackTriggers.includes(event.status)) return;
 
     const currentModel = ctx.model;
     const retryAfter = parseInt(
@@ -228,19 +234,34 @@ export const initializeRateLimitFallback = (
       retryAfter || undefined,
     );
 
+    // Provide transparent UI notifications to the user about why fallback is occurring
+    const statusReason =
+      event.status === 402
+        ? 'out of credits (402)'
+        : event.status === 529
+          ? 'provider overloaded (529)'
+          : event.status === 503
+            ? 'service unavailable (503)'
+            : `rate limited (429)`;
+
     if (retryAfter > 0 && retryAfter < config.shortDelayThreshold) {
       ctx.ui.notify(
-        `[Router] Rate limited. Retry after ${retryAfter}s`,
+        `[Router] ${statusReason}. Retry after ${retryAfter}s`,
         'warning',
       );
     } else if (config.autoFallback && !state.fallbackActive) {
       const result = await tryFallback(pi, ctx, config, 'rate_limit');
       if (result.success) {
-        ctx.ui.notify(`[Router] Auto-fallback: ${result.message}`, 'info');
+        ctx.ui.notify(
+          `[Router] Auto-fallback due to ${statusReason}: ${result.message}`,
+          'info',
+        );
+        // Transparent session tracking (for RPC clients)
+        pi.appendEntry('router-fallback', { reason: statusReason, result });
       }
     } else {
       ctx.ui.notify(
-        '[Router] Rate limited. Use /router fallback to switch',
+        `[Router] ${statusReason}. Use /router fallback to switch`,
         'warning',
       );
     }
