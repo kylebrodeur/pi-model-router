@@ -37,7 +37,7 @@ export interface RateLimitFallbackConfig {
   autoFallback?: boolean;
   autoRestore?: boolean;
   restoreCheckInterval?: number;
-  preferredLocalModels?: string[];
+  fallbackSequence?: string[];
 }
 
 // ─── Original Router Types ─────────────────────────────────────────────────

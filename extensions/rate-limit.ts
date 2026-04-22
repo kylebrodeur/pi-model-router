@@ -4,7 +4,6 @@
  * Monitors provider responses for rate limiting.
  * NOTE: Requires Pi 0.67+ for after_provider_response event.
  */
-import { readFileSync } from 'node:fs';
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -18,7 +17,7 @@ export interface RateLimitConfig {
   autoFallback: boolean;
   autoRestore: boolean;
   restoreCheckInterval: number;
-  preferredLocalModels: string[];
+  fallbackSequence: string[];
 }
 
 export interface RateLimitEventEntry {
@@ -45,7 +44,7 @@ export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   autoFallback: false,
   autoRestore: false,
   restoreCheckInterval: 300,
-  preferredLocalModels: [],
+  fallbackSequence: ['ollama/*'],
 };
 
 // ─── Module State ───────────────────────────────────────────────────────────
@@ -59,29 +58,26 @@ let history: RateLimitEventEntry[] = [];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const getModelsJsonPath = (): string => {
-  return process.env.HOME
-    ? `${process.env.HOME}/.pi/agent/models.json`
-    : '/.pi/agent/models.json';
-};
+const findBestFallbackModel = (
+  ctx: ExtensionContext,
+  sequence: string[],
+): { provider: string; id: string } | undefined => {
+  const availableModels = ctx.modelRegistry.getAvailable();
 
-const findBestOllamaModel = (preferred: string[]): string | undefined => {
-  try {
-    const data = JSON.parse(readFileSync(getModelsJsonPath(), 'utf-8'));
-    const models: Array<{ id: string; _launch?: boolean }> =
-      data?.providers?.ollama?.models || [];
-    if (models.length === 0) return undefined;
-
-    for (const pref of preferred) {
-      if (models.some((m) => m.id === pref)) return pref;
-      const match = models.find((m) => m.id.startsWith(pref));
-      if (match) return match.id;
+  for (const pattern of sequence) {
+    for (const model of availableModels) {
+      const targetId = `${model.provider}/${model.id}`;
+      if (pattern === targetId)
+        return { provider: model.provider, id: model.id };
+      if (pattern.endsWith('*')) {
+        const prefix = pattern.slice(0, -1);
+        if (targetId.startsWith(prefix))
+          return { provider: model.provider, id: model.id };
+      }
     }
-
-    return models.find((m) => m._launch)?.id || models[0]?.id;
-  } catch {
-    return undefined;
   }
+
+  return undefined;
 };
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -102,19 +98,20 @@ export const tryFallback = async (
     state.preferredModel = `${currentModel.provider}/${currentModel.id}`;
   }
 
-  const targetId = findBestOllamaModel(
-    config.preferredLocalModels.length > 0 ? config.preferredLocalModels : [],
+  const target = findBestFallbackModel(
+    ctx,
+    config.fallbackSequence.length > 0 ? config.fallbackSequence : ['ollama/*'],
   );
 
-  if (!targetId) {
-    return { success: false, message: 'No Ollama models available' };
+  if (!target) {
+    return { success: false, message: 'No fallback models available' };
   }
 
-  const targetModel = ctx.modelRegistry.find('ollama', targetId);
+  const targetModel = ctx.modelRegistry.find(target.provider, target.id);
   if (!targetModel) {
     return {
       success: false,
-      message: `Ollama ${targetId} not in registry. Try /reload.`,
+      message: `Model ${target.provider}/${target.id} not in registry. Try /reload.`,
     };
   }
 
@@ -129,8 +126,8 @@ export const tryFallback = async (
   return {
     success,
     message: success
-      ? `Switched to Ollama ${targetId}`
-      : 'Failed to switch to Ollama',
+      ? `Switched to ${target.provider}/${target.id}`
+      : `Failed to switch to ${target.provider}/${target.id}`,
   };
 };
 
@@ -243,7 +240,7 @@ export const initializeRateLimitFallback = (
       }
     } else {
       ctx.ui.notify(
-        '[Router] Rate limited. Use /router fallback to switch to Ollama',
+        '[Router] Rate limited. Use /router fallback to switch',
         'warning',
       );
     }
