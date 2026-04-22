@@ -3,45 +3,15 @@
 ## 1. Install Extension
 
 ```bash
-cd ~/projects/pi-model-router-forked
-
-# Create Pi extension directory
-mkdir -p ~/.pi/agent/extensions/pi-model-router
-
-# Copy all source files
-cp extensions/*.ts ~/.pi/agent/extensions/pi-model-router/
-cp package.json ~/.pi/agent/extensions/pi-model-router/
-cp tsconfig.json ~/.pi/agent/extensions/pi-model-router/
+pi install npm:@kylebrodeur/pi-model-router
 ```
 
-## 2. Enable Features in Config
+## 2. Initialize Config
 
-```bash
-cat > ~/.pi/agent/model-router.json << 'EOF'
-{
-  "features": {
-    "ollamaSync": true,
-    "rateLimitFallback": true,
-    "scopeShim": true,
-    "perTurnRouting": true,
-    "costBudgeting": true,
-    "phaseMemory": true
-  },
-  "rateLimitFallback": {
-    "enabled": true,
-    "shortDelayThreshold": 60,
-    "fallbackSequence": ["ollama/*"]
-  },
-  "profiles": {
-    "balanced": {
-      "high": { "model": "anthropic/claude-sonnet-4" },
-      "medium": { "model": "google/gemini-flash-latest" },
-      "low": { "model": "ollama/gemma4:9b" }
-    }
-  }
-}
-EOF
 ```
+/router init
+```
+This scaffolds a default configuration at `~/.pi/agent/model-router.json`.
 
 ## 3. Use in Pi
 
@@ -97,7 +67,7 @@ Expected: switches to best available model matching your `fallbackSequence` (e.g
 | `/router ollama-sync` | Manually sync Ollama models |
 | `/router fallback` | Switch to fallback model sequence (manual) |
 | `/router restore` | Restore original cloud model |
-| `/router scope` | Sync profile models to Pi UI |
+| `/router init` | Scaffold default config file |
 
 All existing `/router *` commands still work unchanged.
 

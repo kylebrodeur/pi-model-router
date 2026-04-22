@@ -22,33 +22,10 @@
 ### Install Locally (Pre-Publish Test)
 
 ```bash
-cd ~/projects/pi-model-router-forked
+pi install git:github.com/kylebrodeur/pi-model-router@main
 
-# Install to Pi extensions
-mkdir -p ~/.pi/agent/extensions/pi-model-router
-cp extensions/*.ts ~/.pi/agent/extensions/pi-model-router/
-cp package.json ~/.pi/agent/extensions/pi-model-router/
-cp tsconfig.json ~/.pi/agent/extensions/pi-model-router/
-
-# Create test config
-cat > ~/.pi/agent/model-router.json << 'EOF'
-{
-  "features": {
-    "ollamaSync": true,
-    "rateLimitFallback": true,
-    "perTurnRouting": true,
-    "costBudgeting": true,
-    "phaseMemory": true
-  },
-  "profiles": {
-    "balanced": {
-      "high": { "model": "anthropic/claude-sonnet-4" },
-      "medium": { "model": "google/gemini-flash-latest" },
-      "low": { "model": "ollama/gemma4:9b" }
-    }
-  }
-}
-EOF
+# Create default config
+/router init
 ```
 
 ### Testing Checklist
@@ -58,6 +35,7 @@ Run these in a fresh Pi session:
 ```
 /reload
 /new
+/router init            # Create default config
 /router status          # Should show enabled, correct profiles
 /router config          # Should list features
 /router ollama-sync     # Should sync Ollama models (if Ollama running)

@@ -10,51 +10,15 @@
 ## Installation Steps
 
 ```bash
-# 1. Navigate to fork
-cd ~/projects/pi-model-router-forked
+# Install from github
+pi install git:github.com/kylebrodeur/pi-model-router@main
 
-# 2. Install dependencies
-npm install
+# Start Pi session
+pi
 
-# 3. Install as Pi extension globally (development mode)
-mkdir -p ~/.pi/agent/extensions/pi-model-router
-cp -r extensions/* ~/.pi/agent/extensions/pi-model-router/
-cp package.json ~/.pi/agent/extensions/pi-model-router/
-cp tsconfig.json ~/.pi/agent/extensions/pi-model-router/
-
-# 4. Create config
-cat > ~/.pi/agent/model-router.json << 'EOF'
-{
-  "features": {
-    "ollamaSync": true,
-    "rateLimitFallback": true,
-    "perTurnRouting": true,
-    "intentClassifier": false,
-    "costBudgeting": true,
-    "phaseMemory": true
-  },
-  "ollamaSync": {
-    "enabled": true,
-    "onStartup": true,
-    "onReload": true,
-    "addLaunchFlag": false
-  },
-  "rateLimitFallback": {
-    "enabled": true,
-    "shortDelayThreshold": 60,
-    "autoFallback": false,
-    "autoRestore": false,
-    "fallbackSequence": ["ollama/*"]
-  },
-  "profiles": {
-    "balanced": {
-      "high": { "model": "anthropic/claude-sonnet-4", "thinking": "high" },
-      "medium": { "model": "google/gemini-flash-latest", "thinking": "medium" },
-      "low": { "model": "ollama/gemma4:9b", "thinking": "off" }
-    }
-  }
-}
-EOF
+# Scaffold config
+/router init
+/router reload
 ```
 
 ## Test 1: Basic Router Functionality (Upstream Baseline)
@@ -63,7 +27,7 @@ EOF
 
 ```bash
 # Start Pi with router extension
-pi -e ~/.pi/agent/extensions/pi-model-router/index.ts
+pi
 ```
 
 - [ ] Pi starts without errors

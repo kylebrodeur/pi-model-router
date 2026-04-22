@@ -1,8 +1,8 @@
 {
-  "name": "@yeliu84/pi-model-router",
+  "name": "@kylebrodeur/pi-model-router",
   "version": "0.1.0",
   "type": "module",
-  "description": "Intelligent per-turn model router extension for the pi coding agent",
+  "description": "Intelligent per-turn model router extension for the pi coding agent (Enhanced Fork)",
   "keywords": [
     "pi-package",
     "pi",
@@ -12,14 +12,14 @@
     "extension"
   ],
   "license": "MIT",
-  "author": "Ye Liu",
+  "author": "Ye Liu (Forked by Kyle Brodeur)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yeliu84/pi-model-router.git"
+    "url": "https://github.com/kylebrodeur/pi-model-router.git"
   },
-  "homepage": "https://github.com/yeliu84/pi-model-router#readme",
+  "homepage": "https://github.com/kylebrodeur/pi-model-router#readme",
   "bugs": {
-    "url": "https://github.com/yeliu84/pi-model-router/issues"
+    "url": "https://github.com/kylebrodeur/pi-model-router/issues"
   },
   "exports": {
     ".": "./extensions/index.ts"

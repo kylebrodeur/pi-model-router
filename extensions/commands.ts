@@ -1,7 +1,10 @@
-import type {
-  ExtensionAPI,
-  ExtensionContext,
+import {
+  getAgentDir,
+  type ExtensionAPI,
+  type ExtensionContext,
 } from '@mariozechner/pi-coding-agent';
+import { existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { AutocompleteItem } from '@mariozechner/pi-tui';
 import type {
   RouterConfig,
@@ -86,6 +89,7 @@ export const registerCommands = (
     { name: 'widget', desc: 'Toggle the router status widget' },
     { name: 'debug', desc: 'Toggle or clear router debug history' },
     { name: 'reload', desc: 'Reload the model router configuration' },
+    { name: 'init', desc: 'Create a default model-router.json config file' },
     { name: 'help', desc: 'Show usage help for subcommands' },
   ];
 
@@ -563,6 +567,98 @@ export const registerCommands = (
     );
   };
 
+  const handleInit = async (args: string[], ctx: ExtensionContext) => {
+    if (args.length > 0) {
+      ctx.ui.notify('Usage: /router init (no arguments)', 'error');
+      return;
+    }
+
+    const configPath = join(getAgentDir(), 'model-router.json');
+    if (existsSync(configPath)) {
+      ctx.ui.notify(
+        `Config already exists at ${configPath}. Use /router reload to apply changes.`,
+        'warning',
+      );
+      return;
+    }
+
+    const defaultConfig = {
+      features: {
+        ollamaSync: true,
+        rateLimitFallback: true,
+        scopeShim: true,
+        perTurnRouting: true,
+        intentClassifier: false,
+        costBudgeting: true,
+        phaseMemory: true,
+      },
+      ollamaSync: {
+        enabled: true,
+        onStartup: true,
+        onReload: true,
+      },
+      rateLimitFallback: {
+        enabled: true,
+        shortDelayThreshold: 60,
+        autoFallback: false,
+        autoRestore: false,
+        fallbackSequence: ['anthropic/claude-3-haiku-20240307', 'ollama/*'],
+      },
+      defaultProfile: 'auto',
+      debug: false,
+      classifierModel: 'google/gemini-flash-latest',
+      phaseBias: 0.5,
+      maxSessionBudget: 1.0,
+      largeContextThreshold: 100000,
+      rules: [
+        {
+          matches: ['deploy', 'production', 'release'],
+          tier: 'high',
+          reason: 'Safety check for production tasks',
+        },
+        { matches: 'changelog', tier: 'low' },
+      ],
+      profiles: {
+        auto: {
+          high: {
+            model: 'openai/gpt-5.4-pro',
+            thinking: 'high',
+            fallbacks: ['anthropic/claude-3-5-sonnet-20241022'],
+          },
+          medium: { model: 'google/gemini-flash-latest', thinking: 'medium' },
+          low: { model: 'openai/gpt-5.4-nano', thinking: 'low' },
+        },
+        cheap: {
+          high: { model: 'google/gemini-flash-latest', thinking: 'low' },
+          medium: { model: 'openai/gpt-5.4-nano', thinking: 'off' },
+          low: { model: 'google/gemini-flash-lite-latest', thinking: 'off' },
+        },
+        deep: {
+          high: { model: 'openai/o1-preview', thinking: 'xhigh' },
+          medium: { model: 'openai/gpt-5.4-pro', thinking: 'medium' },
+          low: { model: 'google/gemini-flash-latest', thinking: 'low' },
+        },
+      },
+    };
+
+    try {
+      writeFileSync(
+        configPath,
+        JSON.stringify(defaultConfig, null, 2),
+        'utf-8',
+      );
+      ctx.ui.notify(
+        `Created default config at ~/.pi/agent/model-router.json. Run /router reload to apply.`,
+        'info',
+      );
+    } catch (err) {
+      ctx.ui.notify(
+        `Failed to create config: ${err instanceof Error ? err.message : String(err)}`,
+        'error',
+      );
+    }
+  };
+
   // ─── New subcommand handlers (added by fork) ─────────────────────────────
 
   const handleOllamaSync = async (args: string[], ctx: ExtensionContext) => {
@@ -878,6 +974,9 @@ export const registerCommands = (
         case 'reload':
           await handleReload(subArgs, ctx);
           break;
+        case 'init':
+          await handleInit(subArgs, ctx);
+          break;
         case 'status':
           await handleStatus(subArgs, ctx);
           break;
@@ -904,6 +1003,7 @@ export const registerCommands = (
               '  widget <on|off|toggle>      Control the persistent status widget visibility.',
               '  debug <on|off|show|clear>   Control routing debug logging to notifications and history.',
               '  reload                      Hot-reload the configuration JSON from .pi/model-router.json.',
+              '  init                        Create a default configuration file if it does not exist.',
               '  help, ?                     Show this help message.',
             ].join('\n'),
             'info',
