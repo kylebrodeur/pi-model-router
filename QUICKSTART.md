@@ -71,6 +71,9 @@ Expected: switches to best available model matching your `fallbackSequence` (e.g
 | `/router fallback`    | Switch to fallback model sequence (manual) |
 | `/router restore`     | Restore original cloud model               |
 | `/router init`        | Scaffold default config file               |
+| `/router scope apply` | Sync router profiles to Pi enabled models  |
+| `/router scope reset` | Clear router profiles from Pi enabled list |
+| `/router scope show`  | Show current Pi scoped models settings     |
 
 All existing `/router *` commands still work unchanged.
 

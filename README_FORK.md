@@ -63,12 +63,15 @@ cat ~/.pi/agent/model-router.json
 
 ## New Commands
 
-| Command               | Feature           | Description                       |
-| --------------------- | ----------------- | --------------------------------- |
-| `/router ollama-sync` | ollamaSync        | Manually sync Ollama models       |
-| `/router fallback`    | rateLimitFallback | Switch to fallback model sequence |
-| `/router restore`     | rateLimitFallback | Restore cloud model               |
-| `/router init`        |                   | Scaffold default config file      |
+| Command                 | Feature           | Description                                |
+| ----------------------- | ----------------- | ------------------------------------------ |
+| `/router ollama-sync`   | ollamaSync        | Manually sync Ollama models                |
+| `/router fallback`      | rateLimitFallback | Switch to fallback model sequence          |
+| `/router restore`       | rateLimitFallback | Restore cloud model                        |
+| `/router init`          |                   | Scaffold default config file               |
+| `/router scope apply`   | scopeShim         | Sync router profiles to Pi enabled models  |
+| `/router scope reset`   | scopeShim         | Clear router profiles from Pi enabled list |
+| `/router scope show`    | scopeShim         | Show current Pi scoped models settings     |
 
 ## Feature Toggle Config
 

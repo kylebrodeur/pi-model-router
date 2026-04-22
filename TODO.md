@@ -46,6 +46,7 @@ Run these in a fresh Pi session:
 /router widget on       # Enable status widget
 /router reload          # Hot-reload config
 /router disable         # Disable router
+/router scope apply     # Sync router profiles to Pi enabled models
 ```
 
 **Verify:**
