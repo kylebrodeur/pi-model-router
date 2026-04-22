@@ -81,6 +81,7 @@ cat ~/.pi/agent/model-router.json
     "ollamaSync": true, // Auto-sync Ollama models
     "rateLimitFallback": true, // Rate limit detection + fallback
     "scopeShim": true, // Sync profiles to enabledModels in Pi
+    "respectPiScope": false, // Strict scope validation (Pi -> Router)
     "perTurnRouting": true, // Original: tier-based routing
     "intentClassifier": false, // Original: LLM-based intent detection
     "costBudgeting": true, // Original: Session spend tracking
@@ -127,7 +128,8 @@ Our additions follow the same patterns:
 | Ollama auto-sync      | ❌             | ✅                                             |
 | Rate limit fallback   | ❌             | ✅ (402, 429, 503, 529 support)                |
 | Transparent Fallbacks | ❌             | ✅ (UI notifications + Session Entry Tracking) |
-| Scope shim            | ❌             | ✅                                             |
+| Scope shim            | ❌             | ✅ (Router → Pi)                               |
+| Strict Pi Scope       | ❌             | ✅ (Pi → Router) `respectPiScope`              |
 | Feature toggles       | ❌             | ✅                                             |
 | Project-level config  | ❌ (user only) | ✅ (user + project)                            |
 

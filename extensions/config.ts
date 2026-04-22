@@ -12,11 +12,24 @@ import type {
   RoutingRule,
 } from './types';
 
+import { readSettingsScope } from './scope-shim';
+
 export const ROUTER_TIERS = ['high', 'medium', 'low'] as const;
 
 export const FALLBACK_CONFIG: RouterConfig = {
   defaultProfile: 'auto',
   debug: false,
+  features: {
+    ollamaSync: true,
+    rateLimitFallback: true,
+    scopeShim: true,
+    respectPiScope: false, // Disabled by default for backward compatibility
+    perTurnRouting: true,
+    intentClassifier: false,
+    costBudgeting: true,
+    phaseMemory: true,
+    contextCompression: true,
+  },
   profiles: {
     auto: {
       high: { model: 'openai/gpt-5.4-pro', thinking: 'off' },
@@ -132,6 +145,7 @@ export const normalizeTierConfig = (
   profileName: string,
   tier: RouterTier,
   warnings: string[],
+  enabledModelsScope?: string[], // New parameter
 ): RoutedTierConfig => {
   if (!isObjectRecord(value)) {
     warnings.push(
@@ -150,6 +164,11 @@ export const normalizeTierConfig = (
     try {
       parseCanonicalModelRef(model);
       parsedModel = model;
+      if (enabledModelsScope && !enabledModelsScope.includes(parsedModel)) {
+        warnings.push(
+          `[Scope Violation] Profile "${profileName}" ${tier} tier uses '${parsedModel}', but it is not in Pi's enabledModels.`,
+        );
+      }
     } catch (error) {
       warnings.push(error instanceof Error ? error.message : String(error));
     }
@@ -171,6 +190,11 @@ export const normalizeTierConfig = (
       if (typeof f === 'string') {
         try {
           parseCanonicalModelRef(f);
+          if (enabledModelsScope && !enabledModelsScope.includes(f)) {
+             warnings.push(
+               `[Scope Violation] Profile "${profileName}" ${tier} tier fallback '${f}' is not in Pi's enabledModels.`
+             );
+          }
           fallbacks.push(f);
         } catch (error) {
           warnings.push(
@@ -189,6 +213,20 @@ export const normalizeConfig = (raw: RouterConfig): ConfigLoadResult => {
   const normalizedProfiles: Record<string, RouterProfile> = {};
   const fallbackAuto = FALLBACK_CONFIG.profiles.auto;
 
+  const features = raw.features as RouterConfig['features'];
+  let enabledModelsScope: string[] | undefined = undefined;
+
+  // If strict scope validation is enabled, read Pi's settings
+  if (features?.respectPiScope) {
+    const scopeResult = readSettingsScope();
+    if (scopeResult.success && scopeResult.enabledModels) {
+      // Exclude virtual router models from the strict validation check
+      enabledModelsScope = scopeResult.enabledModels.filter(
+        (m) => !m.startsWith('router/'),
+      );
+    }
+  }
+
   for (const [name, profile] of Object.entries(raw.profiles ?? {})) {
     normalizedProfiles[name] = {
       high: normalizeTierConfig(
@@ -197,6 +235,7 @@ export const normalizeConfig = (raw: RouterConfig): ConfigLoadResult => {
         name,
         'high',
         warnings,
+        enabledModelsScope,
       ),
       medium: normalizeTierConfig(
         profile?.medium,
@@ -204,6 +243,7 @@ export const normalizeConfig = (raw: RouterConfig): ConfigLoadResult => {
         name,
         'medium',
         warnings,
+        enabledModelsScope,
       ),
       low: normalizeTierConfig(
         profile?.low,
@@ -211,6 +251,7 @@ export const normalizeConfig = (raw: RouterConfig): ConfigLoadResult => {
         name,
         'low',
         warnings,
+        enabledModelsScope,
       ),
     };
   }

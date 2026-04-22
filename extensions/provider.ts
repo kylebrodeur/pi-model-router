@@ -380,6 +380,35 @@ export const registerRouterProvider = (
             decision.targetLabel,
             ...(profile[decision.tier].fallbacks ?? []),
           ];
+
+          // Strict scope runtime enforcement
+          if (state.currentConfig.features?.respectPiScope) {
+            modelsToTry = modelsToTry.filter((modelRef) => {
+              try {
+                const { provider, modelId } = parseCanonicalModelRef(modelRef);
+                const m = state.currentModelRegistry?.find(provider, modelId);
+                // If the model exists in the registry, it is enabled by Pi's scope.
+                // We rely on the modelRegistry to only contain models that Pi allows.
+                return m !== undefined;
+              } catch {
+                return false;
+              }
+            });
+            if (modelsToTry.length === 0) {
+               stream.push({
+                 type: 'error',
+                 reason: 'error',
+                 error: createErrorMessage(
+                   model,
+                   `[Scope Violation] No enabled models available for tier '${decision.tier}' under Pi's strict scope constraint.`
+                 ),
+               });
+               stream.end();
+               actions.persistState();
+               return stream;
+            }
+          }
+
           if (imageAttached) {
             modelsToTry = modelsToTry.filter((modelRef) => {
               try {

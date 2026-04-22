@@ -14,6 +14,8 @@ export type RouterFeature =
 export interface FeatureToggles {
   ollamaSync?: boolean;
   rateLimitFallback?: boolean;
+  scopeShim?: boolean;
+  respectPiScope?: boolean; // New: Strict scope validation (Pi -> Extension)
   perTurnRouting?: boolean;
   intentClassifier?: boolean;
   costBudgeting?: boolean;
