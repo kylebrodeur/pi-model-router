@@ -43,7 +43,8 @@ cat > ~/.pi/agent/model-router.json << 'EOF'
     "enabled": true,
     "shortDelayThreshold": 60,
     "autoFallback": false,
-    "autoRestore": false
+    "autoRestore": false,
+    "fallbackSequence": ["ollama/*"]
   },
   "profiles": {
     "balanced": {

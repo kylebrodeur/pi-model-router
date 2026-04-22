@@ -62,7 +62,8 @@ cat > ~/.pi/agent/model-router.json << 'EOF'
   },
   "rateLimitFallback": {
     "enabled": true,
-    "shortDelayThreshold": 60
+    "shortDelayThreshold": 60,
+    "fallbackSequence": ["ollama/*"]
   },
   "profiles": {
     "balanced": {
