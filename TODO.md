@@ -12,6 +12,8 @@
 | 6 | Gate/remove `console.log` per pi standards | ✅ |
 | 7 | Prettier formatting | ✅ |
 | 8 | TypeScript strict compilation | ✅ 0 errors |
+| 9 | Scope shim (`setScopedModels` workaround) | ✅ `extensions/scope-shim.ts` |
+| 10 | Upstream API issue | ✅ [#3535](https://github.com/badlogic/pi-mono/issues/3535) |
 
 ---
 

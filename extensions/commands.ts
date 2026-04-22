@@ -31,6 +31,12 @@ import {
   getFallbackState,
   getRateLimitHistory,
 } from './rate-limit';
+import {
+  deriveRouterScope,
+  writeSettingsScope,
+  resetSettingsScope,
+  readSettingsScope,
+} from './scope-shim';
 
 export const registerCommands = (
   pi: ExtensionAPI,
@@ -65,6 +71,7 @@ export const registerCommands = (
   const SUBCOMMAND_DETAILS = [
     { name: 'status', desc: 'Show current router status' },
     { name: 'config', desc: 'Show or toggle feature configuration' },
+    { name: 'scope', desc: 'Manage Pi scoped-models from router config' },
     { name: 'ollama-sync', desc: 'Sync Ollama models to models.json' },
     { name: 'fallback', desc: 'Switch to Ollama fallback model' },
     { name: 'restore', desc: 'Restore original model after fallback' },
@@ -674,6 +681,42 @@ export const registerCommands = (
     actions.persistState();
   };
 
+  const handleScope = async (args: string[], ctx: ExtensionContext) => {
+    const scope = deriveRouterScope(state.currentConfig);
+    if (scope.length === 0) {
+      ctx.ui.notify('No models found in router config.', 'error');
+      return;
+    }
+    if (args.length === 0) {
+      const lines = [
+        'Router-derived scope (all profiles):',
+        ...scope.map(
+          (s, i) =>
+            `  ${i + 1}. ${s.modelRef} (${s.thinkingLevel ?? 'default'})`,
+        ),
+        '',
+        'Usage: /router scope <apply|reset|show>',
+      ];
+      ctx.ui.notify(lines.join('\n'), 'info');
+      return;
+    }
+
+    const cmd = args[0].toLowerCase();
+    if (cmd === 'apply') {
+      const merge = args[1] === 'merge';
+      const result = writeSettingsScope(scope, merge);
+      ctx.ui.notify(result.message, result.success ? 'info' : 'error');
+    } else if (cmd === 'reset') {
+      const result = resetSettingsScope();
+      ctx.ui.notify(result.message, result.success ? 'info' : 'error');
+    } else if (cmd === 'show') {
+      const result = readSettingsScope();
+      ctx.ui.notify(result.message, 'info');
+    } else {
+      ctx.ui.notify('Usage: /router scope <apply|reset|show>', 'error');
+    }
+  };
+
   pi.registerCommand('router', {
     description: 'Model router control center',
     getArgumentCompletions: (prefix) => {
@@ -760,6 +803,17 @@ export const registerCommands = (
             }));
           return items.length > 0 ? items : null;
         }
+        case 'scope': {
+          const scopePrefix = subArgs[0] ?? '';
+          const items = ['apply', 'reset', 'show']
+            .filter((v) => v.startsWith(scopePrefix))
+            .map((v) => ({
+              value: `scope ${v}`,
+              label: v,
+              description: `Scope: ${v}`,
+            }));
+          return items.length > 0 ? items : null;
+        }
         case 'ollama-sync':
         case 'fallback':
         case 'restore':
@@ -806,6 +860,9 @@ export const registerCommands = (
         case 'config':
           await handleConfig(subArgs, ctx);
           break;
+        case 'scope':
+          await handleScope(subArgs, ctx);
+          break;
         case 'ollama-sync':
           await handleOllamaSync(subArgs, ctx);
           break;
@@ -835,6 +892,7 @@ export const registerCommands = (
               'Router Subcommands:',
               '  status                      Show current status, profile, pin, cost, and last decision.',
               '  config [feature]            Show or toggle features (ollama-sync, rate-limit, classifier, budget).',
+              '  scope <apply|reset|show>    Manage Pi scoped-models from your router config.',
               '  ollama-sync                 Sync new Ollama models to models.json.',
               '  fallback                    Switch to an Ollama model manually.',
               '  restore                     Restore the original model after fallback.',
