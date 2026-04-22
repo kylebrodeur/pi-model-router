@@ -140,6 +140,11 @@ When `pi` encounters an API outage or rate limit (HTTP `402`, `429`, `503`, or `
 
 MIT (same as upstream)
 
+## Acknowledgements
+
+- **[yeliu84/pi-model-router](https://github.com/yeliu84/pi-model-router)**: The original author and architecture behind the `router` provider.
+- **[shouvik12/trooper](https://github.com/shouvik12/trooper)**: The inspiration for our robust, transparent HTTP rate-limit fallback triggers (handling `402`, `429`, and `529` cleanly without masking auth errors).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for:
