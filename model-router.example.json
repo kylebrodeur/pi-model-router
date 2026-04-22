@@ -6,7 +6,8 @@
     "perTurnRouting": true,
     "intentClassifier": false,
     "costBudgeting": true,
-    "phaseMemory": true
+    "phaseMemory": true,
+    "contextCompression": true
   },
   "ollamaSync": {
     "enabled": true,

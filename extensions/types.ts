@@ -8,7 +8,8 @@ export type RouterFeature =
   | 'perTurnRouting'
   | 'intentClassifier'
   | 'costBudgeting'
-  | 'phaseMemory';
+  | 'phaseMemory'
+  | 'contextCompression';
 
 export interface FeatureToggles {
   ollamaSync?: boolean;
@@ -17,6 +18,7 @@ export interface FeatureToggles {
   intentClassifier?: boolean;
   costBudgeting?: boolean;
   phaseMemory?: boolean;
+  contextCompression?: boolean;
 }
 
 export interface OllamaSyncConfig {

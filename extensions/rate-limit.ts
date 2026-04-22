@@ -87,6 +87,7 @@ export const tryFallback = async (
   ctx: ExtensionContext,
   config: RateLimitConfig,
   triggerReason: FallbackState['triggerReason'] = 'manual',
+  contextCompressionEnabled: boolean = false,
 ): Promise<{ success: boolean; message: string }> => {
   const currentModel = ctx.model;
 
@@ -121,6 +122,23 @@ export const tryFallback = async (
     state.autoRestore = config.autoRestore;
     state.triggeredAt = Date.now();
     state.triggerReason = triggerReason;
+
+    // Context Compression Bridge: Bookmark the start of the fallback period
+    if (
+      contextCompressionEnabled &&
+      ctx.sessionManager &&
+      'appendLabelChange' in ctx.sessionManager
+    ) {
+      try {
+        const sm = ctx.sessionManager as any;
+        const leafId = sm.getLeafId();
+        if (leafId) {
+          sm.appendLabelChange(leafId, 'router-fallback-start');
+        }
+      } catch (err) {
+        // Silently fail if session manager doesn't support labels
+      }
+    }
   }
 
   return {
@@ -134,6 +152,7 @@ export const tryFallback = async (
 export const tryRestore = async (
   pi: ExtensionAPI,
   ctx: ExtensionContext,
+  contextCompressionEnabled: boolean = false,
 ): Promise<{ success: boolean; message: string }> => {
   if (!state.fallbackActive || !state.preferredModel) {
     return { success: false, message: 'No preferred model stored' };
@@ -153,6 +172,19 @@ export const tryRestore = async (
   if (success) {
     state.fallbackActive = false;
     state.autoRestore = false;
+
+    // Context Compression Bridge: Instruct the model to summarize the fallback period
+    if (contextCompressionEnabled) {
+      pi.sendMessage(
+        {
+          customType: 'router-context-compression',
+          content:
+            "System Context: You have just been restored to the primary high-tier model after a period of rate-limit fallback. Before continuing the user's task, please use your `context_checkout` tool to squash the previous fallback period into a concise summary. Use the target `router-fallback-start`.",
+          display: false,
+        },
+        { deliverAs: 'followUp' },
+      );
+    }
   }
 
   return {
@@ -201,6 +233,7 @@ export const resetRateLimitState = (): void => {
 export const initializeRateLimitFallback = (
   pi: ExtensionAPI,
   rawConfig: Record<string, unknown>,
+  contextCompressionEnabled: boolean = false,
 ): void => {
   const config = { ...DEFAULT_RATE_LIMIT_CONFIG };
   for (const key of Object.keys(config) as Array<keyof typeof config>) {
@@ -250,7 +283,13 @@ export const initializeRateLimitFallback = (
         'warning',
       );
     } else if (config.autoFallback && !state.fallbackActive) {
-      const result = await tryFallback(pi, ctx, config, 'rate_limit');
+      const result = await tryFallback(
+        pi,
+        ctx,
+        config,
+        'rate_limit',
+        contextCompressionEnabled,
+      );
       if (result.success) {
         ctx.ui.notify(
           `[Router] Auto-fallback due to ${statusReason}: ${result.message}`,

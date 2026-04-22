@@ -11,16 +11,19 @@ pi install npm:@kylebrodeur/pi-model-router
 ```
 /router init
 ```
+
 This scaffolds a default configuration at `~/.pi/agent/model-router.json`.
 
 ## 3. Use in Pi
 
 In Pi, run:
+
 ```
 /reload
 ```
 
 You should see in console:
+
 ```
 [router] Feature sync complete - ollama: true rate-limit: true
 [router] ollama-sync: enabled
@@ -62,12 +65,12 @@ Expected: switches to best available model matching your `fallbackSequence` (e.g
 
 ## 5. New Commands
 
-| Command | What it does |
-|---------|-------------|
-| `/router ollama-sync` | Manually sync Ollama models |
-| `/router fallback` | Switch to fallback model sequence (manual) |
-| `/router restore` | Restore original cloud model |
-| `/router init` | Scaffold default config file |
+| Command               | What it does                               |
+| --------------------- | ------------------------------------------ |
+| `/router ollama-sync` | Manually sync Ollama models                |
+| `/router fallback`    | Switch to fallback model sequence (manual) |
+| `/router restore`     | Restore original cloud model               |
+| `/router init`        | Scaffold default config file               |
 
 All existing `/router *` commands still work unchanged.
 

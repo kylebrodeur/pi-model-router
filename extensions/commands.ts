@@ -591,6 +591,7 @@ export const registerCommands = (
         intentClassifier: false,
         costBudgeting: true,
         phaseMemory: true,
+        contextCompression: true,
       },
       ollamaSync: {
         enabled: true,
@@ -692,7 +693,13 @@ export const registerCommands = (
     }
     const config =
       (state.currentConfig.rateLimitFallback as Record<string, unknown>) ?? {};
-    const result = await tryFallback(pi, ctx, config as never, 'manual');
+    const result = await tryFallback(
+      pi,
+      ctx,
+      config as never,
+      'manual',
+      state.currentConfig.features?.contextCompression === true,
+    );
     ctx.ui.notify(result.message, result.success ? 'info' : 'error');
     actions.persistState();
   };
@@ -707,7 +714,11 @@ export const registerCommands = (
       ctx.ui.notify('No active fallback to restore from', 'warning');
       return;
     }
-    const result = await tryRestore(pi, ctx);
+    const result = await tryRestore(
+      pi,
+      ctx,
+      state.currentConfig.features?.contextCompression === true,
+    );
     ctx.ui.notify(result.message, result.success ? 'info' : 'error');
     actions.persistState();
   };
@@ -721,7 +732,7 @@ export const registerCommands = (
         '  perTurnRouting: (always active)',
         `  intentClassifier: ${state.currentConfig.features?.intentClassifier ? 'enabled' : 'disabled'}`,
         `  costBudgeting: ${state.currentConfig.features?.costBudgeting !== false ? 'enabled' : 'disabled'}`,
-        `  phaseMemory: ${state.currentConfig.features?.phaseMemory !== false ? 'enabled' : 'disabled'}`,
+        `  contextCompression: ${state.currentConfig.features?.contextCompression === true ? 'enabled' : 'disabled'}`,
         '',
         'Usage: /router config <feature> to toggle',
       ];

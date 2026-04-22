@@ -85,6 +85,7 @@ ollama pull llama3.2:3b
 ```
 
 **Expected:**
+
 - [ ] Notification: `[Router] Added 1 model(s)`
 - [ ] Notification: `Run /reload to see: llama3.2:3b`
 
@@ -95,6 +96,7 @@ ollama pull llama3.2:3b
 ```
 
 **Expected:**
+
 - [ ] Extension reloads
 - [ ] New model appears in `/model` selector under "ollama"
 
@@ -106,6 +108,7 @@ ollama pull llama3.2:3b
 ```
 
 **Expected:**
+
 - [ ] On session start, Ollama sync runs automatically
 - [ ] If new models exist, notifications appear
 - [ ] Console log: `[router] ollama-sync: feature enabled`
@@ -123,6 +126,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 ```
 
 **Expected:**
+
 - [ ] Auto-sync doesn't run on session start
 - [ ] Manual `/router ollama-sync` still works
 
@@ -140,6 +144,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 ```
 
 **Expected:**
+
 - [ ] Status output includes rate limit or fallback info if relevant.
 
 ### Step 2: Manual Fallback
@@ -153,6 +158,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 ```
 
 **Expected:**
+
 - [ ] Switches to fallback model (best available matching sequence)
 - [ ] Status bar shows `🏠 fallback`
 - [ ] Console log shows fallback model name
@@ -164,6 +170,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 ```
 
 **Expected:**
+
 - [ ] Restores to original cloud model
 - [ ] Status bar clears `🏠 fallback`
 
@@ -178,6 +185,7 @@ echo '{ "features": { "rateLimitFallback": false } }' > ~/.pi/agent/model-router
 ```
 
 **Expected:**
+
 - [ ] Console shows `[router] rate-limit-fallback: disabled`
 - [ ] Status bar still shows router info but no fallback indicator
 
@@ -219,6 +227,7 @@ EOF
 ```
 
 **Expected:**
+
 - [ ] Console shows `[router] rate-limit-fallback: disabled`
 - [ ] Console shows `[router] ollama-sync: disabled`
 - [ ] Per-turn routing still works (project didn't override it)
@@ -236,6 +245,7 @@ ollama stop  # or kill process
 ```
 
 **Expected:**
+
 - [ ] Notification: `Ollama not available`
 - [ ] No crash, graceful failure
 
@@ -250,6 +260,7 @@ mv ~/.pi/agent/models.json ~/.pi/agent/models.json.bak
 ```
 
 **Expected:**
+
 - [ ] Notification: `models.json not found`
 
 ```bash
@@ -268,6 +279,7 @@ mv ~/.pi/agent/models.json.bak ~/.pi/agent/models.json
 ```
 
 **Expected:**
+
 - [ ] `No Ollama models available` error notification
 
 ## Test 6: Combined Features (Full Workflow)
@@ -285,6 +297,7 @@ ollama pull qwen3.5:7b
 ```
 
 **Expected:**
+
 1. [ ] Session starts
 2. [ ] Auto-sync detects `qwen3.5:7b`
 3. [ ] Notification: `Added 1 model(s)`
@@ -355,6 +368,7 @@ npm install -g @mariozechner/pi-coding-agent
 ```
 
 If Ollama models don't appear after `/reload`:
+
 1. Check `models.json` has ollama provider section
 2. Verify `baseUrl` is correct: `http://127.0.0.1:11434/v1`
 3. Check Ollama is running: `ollama list` in terminal

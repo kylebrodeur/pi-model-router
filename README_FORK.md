@@ -81,7 +81,8 @@ cat ~/.pi/agent/model-router.json
     "perTurnRouting": true, // Original: tier-based routing
     "intentClassifier": false, // Original: LLM-based intent detection
     "costBudgeting": true, // Original: Session spend tracking
-    "phaseMemory": true // Original: Planning/implementation bias
+    "phaseMemory": true, // Original: Planning/implementation bias
+    "contextCompression": true // Optional: Hand off to pi-context
   }
 }
 ```

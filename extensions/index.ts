@@ -317,6 +317,7 @@ const routerExtension = (pi: ExtensionAPI) => {
       initializeRateLimitFallback(
         pi,
         (currentConfig.rateLimitFallback as Record<string, unknown>) ?? {},
+        features?.contextCompression === true,
       );
     }
 
