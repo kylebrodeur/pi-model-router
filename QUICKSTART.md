@@ -27,6 +27,11 @@ cat > ~/.pi/agent/model-router.json << 'EOF'
     "costBudgeting": true,
     "phaseMemory": true
   },
+  "rateLimitFallback": {
+    "enabled": true,
+    "shortDelayThreshold": 60,
+    "fallbackSequence": ["ollama/*"]
+  },
   "profiles": {
     "balanced": {
       "high": { "model": "anthropic/claude-sonnet-4" },
@@ -78,7 +83,7 @@ Expected: `Added: llama3.2:3b`
 /router fallback
 ```
 
-Expected: switches to best available Ollama model
+Expected: switches to best available model matching your `fallbackSequence` (e.g., an Ollama model)
 
 ```
 # Restore
@@ -90,8 +95,8 @@ Expected: switches to best available Ollama model
 | Command | What it does |
 |---------|-------------|
 | `/router ollama-sync` | Manually sync Ollama models |
-| `/router fallback` | Switch to Ollama (manual) |
-| `/router restore` | Restore cloud model |
+| `/router fallback` | Switch to fallback model sequence (manual) |
+| `/router restore` | Restore original cloud model |
 | `/router scope` | Sync profile models to Pi UI |
 
 All existing `/router *` commands still work unchanged.

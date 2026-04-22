@@ -189,7 +189,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 ```
 
 **Expected:**
-- [ ] Switches to Ollama model (best available)
+- [ ] Switches to fallback model (best available matching sequence)
 - [ ] Status bar shows `🏠 fallback`
 - [ ] Console log shows fallback model name
 

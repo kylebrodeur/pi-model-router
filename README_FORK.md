@@ -87,7 +87,7 @@ EOF
 | Command | Feature | Description |
 |---------|---------|-------------|
 | `/router ollama-sync` | ollamaSync | Manually sync Ollama models |
-| `/router fallback` | rateLimitFallback | Switch to Ollama model |
+| `/router fallback` | rateLimitFallback | Switch to fallback model sequence |
 | `/router restore` | rateLimitFallback | Restore cloud model |
 | `/router scope` | scopeShim | Apply/reset scoped models in settings.json |
 
