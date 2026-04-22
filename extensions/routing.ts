@@ -378,7 +378,9 @@ ${currentPhase === 'implementation' ? 'Consider that the conversation is current
 
     const classifierContext: Context = {
       ...context,
-      messages: [{ role: 'user', content: classifierPrompt, timestamp: Date.now() }],
+      messages: [
+        { role: 'user', content: classifierPrompt, timestamp: Date.now() },
+      ],
     };
 
     const stream = streamSimple(model, classifierContext, { apiKey, headers });

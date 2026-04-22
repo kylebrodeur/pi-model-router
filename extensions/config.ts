@@ -306,15 +306,18 @@ export const normalizeConfig = (raw: RouterConfig): ConfigLoadResult => {
       rules: rules.length > 0 ? rules : undefined,
       profiles: normalizedProfiles,
       // ─── Feature toggles (added by fork) ──────────────────────────────
-      features: typeof raw.features === 'object' && raw.features !== null
-        ? raw.features as RouterConfig['features']
-        : undefined,
-      ollamaSync: typeof raw.ollamaSync === 'object' && raw.ollamaSync !== null
-        ? raw.ollamaSync as RouterConfig['ollamaSync']
-        : undefined,
+      features:
+        typeof raw.features === 'object' && raw.features !== null
+          ? (raw.features as RouterConfig['features'])
+          : undefined,
+      ollamaSync:
+        typeof raw.ollamaSync === 'object' && raw.ollamaSync !== null
+          ? (raw.ollamaSync as RouterConfig['ollamaSync'])
+          : undefined,
       rateLimitFallback:
-        typeof raw.rateLimitFallback === 'object' && raw.rateLimitFallback !== null
-          ? raw.rateLimitFallback as RouterConfig['rateLimitFallback']
+        typeof raw.rateLimitFallback === 'object' &&
+        raw.rateLimitFallback !== null
+          ? (raw.rateLimitFallback as RouterConfig['rateLimitFallback'])
           : undefined,
     },
     warnings,

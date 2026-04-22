@@ -7,7 +7,10 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from '@mariozechner/pi-coding-agent';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -69,21 +72,25 @@ export const DEFAULT_OLLAMA_CONFIG: OllamaSyncConfig = {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function getModelsJsonPath(): string {
+const getModelsJsonPath = (): string => {
   return join(homedir(), '.pi', 'agent', 'models.json');
-}
+};
 
-function loadModelsJson(): ModelsJson | null {
+const loadModelsJson = (): ModelsJson | null => {
   const path = getModelsJsonPath();
   if (!existsSync(path)) return null;
-  try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return null; }
-}
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'));
+  } catch {
+    return null;
+  }
+};
 
-function saveModelsJson(data: ModelsJson): void {
+const saveModelsJson = (data: ModelsJson): void => {
   writeFileSync(getModelsJsonPath(), JSON.stringify(data, null, 2));
-}
+};
 
-function parseOllamaList(output: string): OllamaListEntry[] {
+const parseOllamaList = (output: string): OllamaListEntry[] => {
   const lines = output.trim().split('\n');
   const models: OllamaListEntry[] = [];
   for (let i = 1; i < lines.length; i++) {
@@ -100,12 +107,12 @@ function parseOllamaList(output: string): OllamaListEntry[] {
     }
   }
   return models;
-}
+};
 
-function inferCapabilities(
+const inferCapabilities = (
   modelName: string,
   cfg: OllamaSyncConfig,
-): Partial<ModelsJsonEntry> {
+): Partial<ModelsJsonEntry> => {
   const lower = modelName.toLowerCase();
   const entry: Partial<ModelsJsonEntry> = {
     contextWindow: cfg.defaultContextWindow,
@@ -121,12 +128,16 @@ function inferCapabilities(
     entry.reasoning = true;
   }
 
-  if (lower.includes('kimi') || lower.includes('gemma4') || lower.includes('deepseek')) {
+  if (
+    lower.includes('kimi') ||
+    lower.includes('gemma4') ||
+    lower.includes('deepseek')
+  ) {
     entry.contextWindow = cfg.largeContextWindow;
   }
 
   return entry;
-}
+};
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -136,10 +147,10 @@ export interface OllamaSyncResult {
   success: boolean;
 }
 
-export async function performOllamaSync(
+export const performOllamaSync = async (
   pi: ExtensionAPI,
   userConfig: Partial<OllamaSyncConfig>,
-): Promise<OllamaSyncResult> {
+): Promise<OllamaSyncResult> => {
   const config = { ...DEFAULT_OLLAMA_CONFIG, ...userConfig };
 
   let output: string;
@@ -206,21 +217,20 @@ export async function performOllamaSync(
       added.length > 0 ? `Added ${added.length} model(s)` : 'No new models',
     success: true,
   };
-}
+};
 
 // ─── Extension Integration ──────────────────────────────────────────────────
 
-export function initializeOllamaSync(
+export const initializeOllamaSync = (
   pi: ExtensionAPI,
   rawConfig: Record<string, unknown>,
-): void {
+): void => {
   const merged = { ...DEFAULT_OLLAMA_CONFIG };
   for (const key of Object.keys(merged) as Array<keyof typeof merged>) {
     if (rawConfig[key] !== undefined) merged[key] = rawConfig[key] as never;
   }
 
   if (!merged.enabled) {
-    console.log('[router] ollama-sync: disabled');
     return;
   }
 
@@ -235,15 +245,10 @@ export function initializeOllamaSync(
       const result = await performOllamaSync(pi, merged);
       if (result.success && result.added.length > 0) {
         ctx.ui.notify(`[Router] Added ${result.added.length} model(s)`, 'info');
-        ctx.ui.notify(
-          `Run /reload to see: ${result.added.join(', ')}`,
-          'info',
-        );
-      } else {
-        console.log(`[router] ollama-sync: ${result.message}`);
+        ctx.ui.notify(`Run /reload to see: ${result.added.join(', ')}`, 'info');
+      } else if (!result.success) {
+        ctx.ui.notify(`Ollama sync failed: ${result.message}`, 'warning');
       }
     }
   });
-
-  console.log('[router] ollama-sync: enabled');
-}
+};

@@ -302,8 +302,7 @@ const routerExtension = (pi: ExtensionAPI) => {
     const features = currentConfig.features;
 
     // Ollama sync
-    const shouldSyncOllama =
-      !features || features.ollamaSync !== false; // enabled by default
+    const shouldSyncOllama = !features || features.ollamaSync !== false; // enabled by default
     if (shouldSyncOllama) {
       initializeOllamaSync(
         pi,
@@ -321,7 +320,14 @@ const routerExtension = (pi: ExtensionAPI) => {
       );
     }
 
-    console.log('[router] Feature sync complete - ollama:', shouldSyncOllama, 'rate-limit:', shouldInitRateLimit);
+    if (debugEnabled) {
+      console.log(
+        '[router] Feature sync complete - ollama:',
+        shouldSyncOllama,
+        'rate-limit:',
+        shouldInitRateLimit,
+      );
+    }
   };
 
   actions.reloadConfig();

@@ -4,6 +4,7 @@
  * Monitors provider responses for rate limiting.
  * NOTE: Requires Pi 0.67+ for after_provider_response event.
  */
+import { readFileSync } from 'node:fs';
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -58,16 +59,15 @@ let history: RateLimitEventEntry[] = [];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function getModelsJsonPath(): string {
+const getModelsJsonPath = (): string => {
   return process.env.HOME
     ? `${process.env.HOME}/.pi/agent/models.json`
     : '/.pi/agent/models.json';
-}
+};
 
-function findBestOllamaModel(preferred: string[]): string | undefined {
+const findBestOllamaModel = (preferred: string[]): string | undefined => {
   try {
-    const fs = require('node:fs');
-    const data = JSON.parse(fs.readFileSync(getModelsJsonPath(), 'utf-8'));
+    const data = JSON.parse(readFileSync(getModelsJsonPath(), 'utf-8'));
     const models: Array<{ id: string; _launch?: boolean }> =
       data?.providers?.ollama?.models || [];
     if (models.length === 0) return undefined;
@@ -82,16 +82,16 @@ function findBestOllamaModel(preferred: string[]): string | undefined {
   } catch {
     return undefined;
   }
-}
+};
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
-export async function tryFallback(
+export const tryFallback = async (
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   config: RateLimitConfig,
   triggerReason: FallbackState['triggerReason'] = 'manual',
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string }> => {
   const currentModel = ctx.model;
 
   if (!currentModel) {
@@ -103,9 +103,7 @@ export async function tryFallback(
   }
 
   const targetId = findBestOllamaModel(
-    config.preferredLocalModels.length > 0
-      ? config.preferredLocalModels
-      : [],
+    config.preferredLocalModels.length > 0 ? config.preferredLocalModels : [],
   );
 
   if (!targetId) {
@@ -134,12 +132,12 @@ export async function tryFallback(
       ? `Switched to Ollama ${targetId}`
       : 'Failed to switch to Ollama',
   };
-}
+};
 
-export async function tryRestore(
+export const tryRestore = async (
   pi: ExtensionAPI,
   ctx: ExtensionContext,
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string }> => {
   if (!state.fallbackActive || !state.preferredModel) {
     return { success: false, message: 'No preferred model stored' };
   }
@@ -166,22 +164,22 @@ export async function tryRestore(
       ? `Restored ${state.preferredModel}`
       : 'Failed to restore model',
   };
-}
+};
 
-export function getFallbackState(): FallbackState {
+export const getFallbackState = (): FallbackState => {
   return { ...state };
-}
+};
 
-export function getRateLimitHistory(): RateLimitEventEntry[] {
+export const getRateLimitHistory = (): RateLimitEventEntry[] => {
   return [...history];
-}
+};
 
-export function recordRateLimit(
+export const recordRateLimit = (
   provider: string,
   model: string,
   httpStatus: number,
   retryAfter?: number,
-): void {
+): void => {
   history.push({
     timestamp: Date.now(),
     provider,
@@ -191,34 +189,32 @@ export function recordRateLimit(
   });
   // Keep last 100
   if (history.length > 100) history = history.slice(-100);
-}
+};
 
-export function resetRateLimitState(): void {
+export const resetRateLimitState = (): void => {
   state = {
     fallbackActive: false,
     autoRestore: false,
   };
   history = [];
-}
+};
 
 // ─── Extension Integration ──────────────────────────────────────────────────
 
-export function initializeRateLimitFallback(
+export const initializeRateLimitFallback = (
   pi: ExtensionAPI,
   rawConfig: Record<string, unknown>,
-): void {
+): void => {
   const config = { ...DEFAULT_RATE_LIMIT_CONFIG };
   for (const key of Object.keys(config) as Array<keyof typeof config>) {
     if (rawConfig[key] !== undefined) config[key] = rawConfig[key] as never;
   }
 
   if (!config.enabled) {
-    console.log('[router] rate-limit-fallback: disabled');
     return;
   }
 
-  // Monitor rate limits (Pi 0.67+)
-  // @ts-expect-error — after_provider_response in Pi 0.67+
+  // Monitor rate limits (requires Pi 0.68+)
   pi.on('after_provider_response', async (event, ctx) => {
     if (event.status !== 429 && event.status !== 503) return;
 
@@ -261,6 +257,4 @@ export function initializeRateLimitFallback(
       ctx.ui.setStatus('router-fallback', '');
     }
   });
-
-  console.log('[router] rate-limit-fallback: enabled');
-}
+};

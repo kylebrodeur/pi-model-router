@@ -394,7 +394,7 @@ export const registerRouterProvider = (
               modelsToTry = [decision.targetLabel];
             }
           }
-          let lastError: any;
+          let lastError: unknown;
           let success = false;
 
           for (let i = 0; i < modelsToTry.length; i++) {

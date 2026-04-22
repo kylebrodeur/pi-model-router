@@ -25,7 +25,12 @@ import {
   formatDecision,
 } from './ui';
 import { performOllamaSync } from './ollama-sync';
-import { tryFallback, tryRestore, getFallbackState, getRateLimitHistory } from './rate-limit';
+import {
+  tryFallback,
+  tryRestore,
+  getFallbackState,
+  getRateLimitHistory,
+} from './rate-limit';
 
 export const registerCommands = (
   pi: ExtensionAPI,
@@ -67,7 +72,10 @@ export const registerCommands = (
     { name: 'pin', desc: 'Pin routing for a profile to a specific tier' },
     { name: 'thinking', desc: 'Override thinking level for a tier or profile' },
     { name: 'disable', desc: 'Disable the router and restore last model' },
-    { name: 'fix', desc: 'Correct the last routing decision and pin that tier' },
+    {
+      name: 'fix',
+      desc: 'Correct the last routing decision and pin that tier',
+    },
     { name: 'widget', desc: 'Toggle the router status widget' },
     { name: 'debug', desc: 'Toggle or clear router debug history' },
     { name: 'reload', desc: 'Reload the model router configuration' },
@@ -182,7 +190,6 @@ export const registerCommands = (
 
     return null;
   };
-
 
   const handleStatus = async (args: string[], ctx: ExtensionContext) => {
     if (args.length > 0) {
@@ -558,7 +565,7 @@ export const registerCommands = (
     }
     const result = await performOllamaSync(
       pi,
-      state.currentConfig.ollamaSync as Record<string, unknown> ?? {},
+      (state.currentConfig.ollamaSync as Record<string, unknown>) ?? {},
     );
     if (result.success && result.added.length > 0) {
       ctx.ui.notify(`Added: ${result.added.join(', ')}`, 'info');
@@ -580,7 +587,8 @@ export const registerCommands = (
       ctx.ui.notify('Fallback already active', 'warning');
       return;
     }
-    const config = state.currentConfig.rateLimitFallback as Record<string, unknown> ?? {};
+    const config =
+      (state.currentConfig.rateLimitFallback as Record<string, unknown>) ?? {};
     const result = await tryFallback(pi, ctx, config as never, 'manual');
     ctx.ui.notify(result.message, result.success ? 'info' : 'error');
     actions.persistState();
@@ -625,23 +633,42 @@ export const registerCommands = (
 
     switch (feature) {
       case 'ollama-sync':
-        state.currentConfig.features.ollamaSync = !state.currentConfig.features.ollamaSync;
-        ctx.ui.notify(`ollamaSync: ${state.currentConfig.features.ollamaSync ? 'enabled' : 'disabled'}`, 'info');
+        state.currentConfig.features.ollamaSync =
+          !state.currentConfig.features.ollamaSync;
+        ctx.ui.notify(
+          `ollamaSync: ${state.currentConfig.features.ollamaSync ? 'enabled' : 'disabled'}`,
+          'info',
+        );
         break;
       case 'rate-limit':
-        state.currentConfig.features.rateLimitFallback = !state.currentConfig.features.rateLimitFallback;
-        ctx.ui.notify(`rateLimitFallback: ${state.currentConfig.features.rateLimitFallback ? 'enabled' : 'disabled'}`, 'info');
+        state.currentConfig.features.rateLimitFallback =
+          !state.currentConfig.features.rateLimitFallback;
+        ctx.ui.notify(
+          `rateLimitFallback: ${state.currentConfig.features.rateLimitFallback ? 'enabled' : 'disabled'}`,
+          'info',
+        );
         break;
       case 'classifier':
-        state.currentConfig.features.intentClassifier = !state.currentConfig.features.intentClassifier;
-        ctx.ui.notify(`intentClassifier: ${state.currentConfig.features.intentClassifier ? 'enabled' : 'disabled'}`, 'info');
+        state.currentConfig.features.intentClassifier =
+          !state.currentConfig.features.intentClassifier;
+        ctx.ui.notify(
+          `intentClassifier: ${state.currentConfig.features.intentClassifier ? 'enabled' : 'disabled'}`,
+          'info',
+        );
         break;
       case 'budget':
-        state.currentConfig.features.costBudgeting = !state.currentConfig.features.costBudgeting;
-        ctx.ui.notify(`costBudgeting: ${state.currentConfig.features.costBudgeting ? 'enabled' : 'disabled'}`, 'info');
+        state.currentConfig.features.costBudgeting =
+          !state.currentConfig.features.costBudgeting;
+        ctx.ui.notify(
+          `costBudgeting: ${state.currentConfig.features.costBudgeting ? 'enabled' : 'disabled'}`,
+          'info',
+        );
         break;
       default:
-        ctx.ui.notify(`Unknown feature: ${feature}. Try: ollama-sync, rate-limit, classifier, budget`, 'error');
+        ctx.ui.notify(
+          `Unknown feature: ${feature}. Try: ollama-sync, rate-limit, classifier, budget`,
+          'error',
+        );
         return;
     }
     actions.persistState();
