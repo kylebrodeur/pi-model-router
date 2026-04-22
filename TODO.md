@@ -71,13 +71,13 @@ Run these in a fresh Pi session:
 ```
 
 **Verify:**
-- [ ] No `console.log` noise in stdout on init
-- [ ] No TypeScript errors on `/reload`
-- [ ] `/router status` shows features: `ollamaSync=on`, `rateLimit=on`
-- [ ] Ollama sync runs on session start (if `onStartup: true`)
-- [ ] Rate-limit fallback handler registers silently
-- [ ] Debug output visible only when `/router debug on`
-- [ ] Fallback status shows in footer when active (`🏠 fallback`)
+- [x] No `console.log` noise in stdout on init
+- [x] No TypeScript errors on `/reload`
+- [x] `/router status` shows features: `ollamaSync=on`, `rateLimit=on`
+- [x] Ollama sync runs on session start (if `onStartup: true`)
+- [x] Rate-limit fallback handler registers silently
+- [x] Debug output visible only when `/router debug on`
+- [x] Fallback status shows in footer when active (`🏠 fallback`)
 
 ### Run Static Checks
 

@@ -116,7 +116,7 @@ ollama pull llama3.2:3b
 
 ```
 # In Pi TUI
-/router-ollama-sync
+/router ollama-sync
 ```
 
 **Expected:**
@@ -159,7 +159,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 
 **Expected:**
 - [ ] Auto-sync doesn't run on session start
-- [ ] Manual `/router-ollama-sync` still works
+- [ ] Manual `/router ollama-sync` still works
 
 ## Test 3: Rate Limit Fallback
 
@@ -171,12 +171,11 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 
 ```
 # In Pi TUI, ensure tracking is active
-/router-rate-limit-status
+/router status
 ```
 
 **Expected:**
-- [ ] Shows `Fallback active: no`
-- [ ] Shows `Events this session: 0`
+- [ ] Status output includes rate limit or fallback info if relevant.
 
 ### Step 2: Manual Fallback
 
@@ -185,7 +184,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 /model anthropic/claude-sonnet-4
 
 # Then trigger manual fallback
-/router-fallback
+/router fallback
 ```
 
 **Expected:**
@@ -196,7 +195,7 @@ echo '{ "features": { "ollamaSync": false } }' > .pi/model-router.json
 ### Step 3: Restore
 
 ```
-/router-restore
+/router restore
 ```
 
 **Expected:**
@@ -268,7 +267,7 @@ EOF
 ollama stop  # or kill process
 
 # Try sync
-/router-ollama-sync
+/router ollama-sync
 ```
 
 **Expected:**
@@ -282,7 +281,7 @@ mv ~/.pi/agent/models.json ~/.pi/agent/models.json.bak
 ```
 
 ```
-/router-ollama-sync
+/router ollama-sync
 ```
 
 **Expected:**
@@ -300,7 +299,7 @@ mv ~/.pi/agent/models.json.bak ~/.pi/agent/models.json
 ```
 
 ```
-/router-fallback
+/router fallback
 ```
 
 **Expected:**

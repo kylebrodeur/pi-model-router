@@ -19,6 +19,7 @@ extensions/
 ├── types.ts            # MODIFIED: Extended RouterConfig with features
 ├── ollama-sync.ts      # NEW: Ollama auto-sync module
 ├── rate-limit.ts       # NEW: Rate limit fallback module
+├── scope-shim.ts       # NEW: Scoped models setting shim for pi core
 ├── features.ts         # NEW: Feature toggle types (unused, for reference)
 ├── commands.ts         # UNCHANGED (upstream command logic preserved)
 ├── provider.ts         # UNCHANGED
@@ -84,10 +85,10 @@ EOF
 
 | Command | Feature | Description |
 |---------|---------|-------------|
-| `/router-ollama-sync` | ollamaSync | Manually sync Ollama models |
-| `/router-fallback` | rateLimitFallback | Switch to Ollama model |
-| `/router-restore` | rateLimitFallback | Restore cloud model |
-| `/router-rate-limit-status` | rateLimitFallback | Show rate limit history |
+| `/router ollama-sync` | ollamaSync | Manually sync Ollama models |
+| `/router fallback` | rateLimitFallback | Switch to Ollama model |
+| `/router restore` | rateLimitFallback | Restore cloud model |
+| `/router scope` | scopeShim | Apply/reset scoped models in settings.json |
 
 ## Feature Toggle Config
 
@@ -96,6 +97,7 @@ EOF
   "features": {
     "ollamaSync": true,         // Auto-sync Ollama models
     "rateLimitFallback": true,   // Rate limit detection + fallback
+    "scopeShim": true,           // Sync profiles to enabledModels in Pi
     "perTurnRouting": true,      // Original: tier-based routing
     "intentClassifier": false,   // Original: LLM-based intent detection
     "costBudgeting": true,       // Original: Session spend tracking
@@ -139,6 +141,7 @@ Our additions follow the same patterns:
 | Phase memory | ✅ | ✅ |
 | Ollama auto-sync | ❌ | ✅ |
 | Rate limit fallback | ❌ | ✅ |
+| Scope shim | ❌ | ✅ |
 | Feature toggles | ❌ | ✅ |
 | Project-level config | ❌ (user only) | ✅ (user + project) |
 
