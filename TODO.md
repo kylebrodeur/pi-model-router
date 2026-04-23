@@ -75,6 +75,8 @@ cd ~/projects/pi-model-router-forked
 grep -rn "console\." extensions/ || echo "Clean"
 ```
 
+*Note: All static checks have been run and passed. (✅)*
+
 ---
 
 ## Publishing Steps
@@ -118,14 +120,14 @@ See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
 
 ## Code Quality Gates (Pre-Publish)
 
-| Gate | Command | Expected |
-|------|---------|----------|
-| TypeScript strict | `npx tsc --noEmit` | 0 errors |
-| Prettier | `npx prettier --check extensions/*.ts` | All clean |
-| No `any` types | `grep -rn ": any\\b" extensions/` | Empty |
-| No `require()` | `grep -rn "require(" extensions/` | Empty |
-| No stray `console.log` | `grep -rn "console\.log" extensions/` | Only gated debug in `index.ts` |
-| Arrow functions only | `grep -rn "function " extensions/ \| grep -v "=>"` | Empty |
+| Gate | Command | Expected | Status |
+|------|---------|----------|--------|
+| TypeScript strict | `npx tsc --noEmit` | 0 errors | ✅ |
+| Prettier | `npx prettier --check extensions/*.ts` | All clean | ✅ |
+| No `any` types | `grep -rn ": any\\b" extensions/` | Empty | ✅ |
+| No `require()` | `grep -rn "require(" extensions/` | Empty | ✅ |
+| No stray `console.log` | `grep -rn "console\.log" extensions/` | Only gated debug in `index.ts` | ✅ |
+| Arrow functions only | `grep -rn "function " extensions/ \| grep -v "=>"` | Empty | ✅ |
 
 ---
 
