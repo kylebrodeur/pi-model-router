@@ -9,6 +9,7 @@
 | **Ollama Sync**         | ✅ Ready | Auto-detect and register Ollama models              |
 | **Rate Limit Fallback** | ✅ Ready | Detect rate limits, manual fallback to local models |
 | **Feature Toggles**     | ✅ Ready | Enable/disable features at user or project level    |
+| **Progressive Enhancement** | ✅ Ready | Detect installed plugins (qmd-ledger, agent-bus) and integrate conditionally |
 
 ## Files Changed from Upstream
 
@@ -78,15 +79,17 @@ cat ~/.pi/agent/model-router.json
 ```json
 {
   "features": {
-    "ollamaSync": true, // Auto-sync Ollama models
-    "rateLimitFallback": true, // Rate limit detection + fallback
-    "scopeShim": true, // Sync profiles to enabledModels in Pi
-    "respectPiScope": false, // Strict scope validation (Pi -> Router)
-    "perTurnRouting": true, // Original: tier-based routing
-    "intentClassifier": false, // Original: LLM-based intent detection
-    "costBudgeting": true, // Original: Session spend tracking
-    "phaseMemory": true, // Original: Planning/implementation bias
-    "contextCompression": true // Optional: Hand off to pi-context
+    "ollamaSync": true,        // Auto-sync Ollama models
+    "rateLimitFallback": true,  // Rate limit detection + fallback
+    "scopeShim": true,          // Sync profiles to enabledModels in Pi
+    "respectPiScope": false,     // Strict scope validation (Pi -> Router)
+    "perTurnRouting": true,      // Original: tier-based routing
+    "intentClassifier": false,    // Original: LLM-based intent detection
+    "costBudgeting": true,        // Original: Session spend tracking
+    "phaseMemory": true,          // Original: Planning/implementation bias
+    "contextCompression": true,   // Optional: Hand off to pi-context
+    "ledgerIntegration": false,   // Progressive: Log routing decisions to qmd-ledger
+    "agentBusIntegration": false  // Progressive: Publish model changes to agent-bus
   }
 }
 ```
@@ -132,6 +135,7 @@ Our additions follow the same patterns:
 | Strict Pi Scope       | ❌             | ✅ (Pi → Router) `respectPiScope`              |
 | Feature toggles       | ❌             | ✅                                             |
 | Project-level config  | ❌ (user only) | ✅ (user + project)                            |
+| Progressive Enhancement | ❌           | ✅ (detects qmd-ledger + agent-bus at runtime) |
 
 ### Transparent Fallbacks in RPC/Headless Mode
 
@@ -149,6 +153,24 @@ MIT (same as upstream)
 
 - **[yeliu84/pi-model-router](https://github.com/yeliu84/pi-model-router)**: The original author and architecture behind the `router` provider.
 - **[shouvik12/trooper](https://github.com/shouvik12/trooper)**: The inspiration for our robust, transparent HTTP rate-limit fallback triggers (handling `402`, `429`, and `529` cleanly without masking auth errors).
+
+## Progressive Enhancement
+
+The router supports progressive integration with other Pi extensions. It detects installed plugins at runtime and conditionally enables features based on the `features` config.
+
+**Detection method:** At startup, the router checks `pi.tools` for available functions:
+- `append_ledger` → `qmd-ledger` detected
+- `link_send` → `pi-agent-bus` detected
+
+**Progressive configs:**
+
+| Config | Feature | Step |
+|--------|---------|------|
+| `model-router.ledger.json` | Log routing decisions to ledger | Step 1 |
+| `model-router.agent-bus.json` | Publish model changes to agent-bus | Step 2 |
+| `model-router.essential.json` | All integrations enabled | Step 3 |
+
+**Example:** After installing `pi-qmd-ledger`, copy `model-router.ledger.json` to `.pi/model-router.json` to enable ledger logging of routing decisions.
 
 ## Contributing
 
