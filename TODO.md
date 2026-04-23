@@ -14,6 +14,8 @@
 | 8 | TypeScript strict compilation | ✅ 0 errors |
 | 9 | Scope shim (`setScopedModels` workaround) | ✅ `extensions/scope-shim.ts` |
 | 10 | Upstream API issue | ✅ [#3535](https://github.com/badlogic/pi-mono/issues/3535) |
+| 11 | Progressive Enhancement | ✅ Plugin detection (`detectPlugins`) + conditional integration with qmd-ledger and pi-agent-bus |
+| 12 | Progressive Configs | ✅ `model-router.ledger.json`, `model-router.agent-bus.json`, `model-router.essential.json` |
 
 ---
 
