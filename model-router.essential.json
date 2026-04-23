@@ -1,0 +1,31 @@
+{
+  "comment": "Progressive Step 3: Essential config — all integrations enabled. Maximum interoperability with the Pi package ecosystem.",
+  "features": {
+    "ollamaSync": true,
+    "rateLimitFallback": true,
+    "scopeShim": true,
+    "perTurnRouting": true,
+    "intentClassifier": false,
+    "costBudgeting": true,
+    "phaseMemory": true,
+    "contextCompression": true,
+    "ledgerIntegration": true,
+    "agentBusIntegration": true
+  },
+  "ollamaSync": {
+    "enabled": true,
+    "onStartup": true,
+    "onReload": true
+  },
+  "rateLimitFallback": {
+    "enabled": true,
+    "shortDelayThreshold": 60,
+    "autoFallback": false,
+    "autoRestore": false,
+    "fallbackSequence": ["anthropic/claude-3-haiku-20240307", "ollama/*"]
+  },
+  "rules": [
+    { "matches": "ledger", "tier": "low", "reason": "Ledger operations are lightweight" },
+    { "matches": "agent-bus", "tier": "medium", "reason": "Agent coordination needs reliability" }
+  ]
+}

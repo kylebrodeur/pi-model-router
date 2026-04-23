@@ -1,0 +1,15 @@
+{
+  "comment": "Progressive Step 1: Basic router with qmd-ledger integration. Enables logging routing decisions to ledger.",
+  "features": {
+    "ollamaSync": true,
+    "rateLimitFallback": true,
+    "scopeShim": true,
+    "perTurnRouting": true,
+    "intentClassifier": false,
+    "costBudgeting": true,
+    "phaseMemory": true,
+    "contextCompression": true,
+    "ledgerIntegration": true,
+    "agentBusIntegration": false
+  }
+}

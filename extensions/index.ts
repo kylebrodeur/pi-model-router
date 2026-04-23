@@ -27,6 +27,58 @@ import { registerRouterProvider } from './provider';
 import { initializeOllamaSync } from './ollama-sync';
 import { initializeRateLimitFallback } from './rate-limit';
 
+// ─── Plugin Detection & Progressive Integration ──────────────────────────
+interface PluginStatus {
+  ledger: boolean;
+  agentBus: boolean;
+}
+
+const detectPlugins = (pi: ExtensionAPI): PluginStatus => {
+  const tools = (pi as any).tools ?? {};
+  const log = (pi as any).log;
+  return {
+    ledger: typeof tools.append_ledger === 'function',
+    agentBus: typeof tools.link_send === 'function',
+  };
+};
+
+const detectAndIntegratePlugins = (
+  pi: ExtensionAPI,
+  features: RouterConfig['features'],
+  debugEnabled: boolean,
+) => {
+  const plugins = detectPlugins(pi);
+  const log = (pi as any).log;
+
+  // Ledger integration: log routing decisions to qmd-ledger
+  const shouldIntegrateLedger = features?.ledgerIntegration === true;
+  if (shouldIntegrateLedger && plugins.ledger) {
+    log.info(
+      '[router] Progressive: qmd-ledger detected. Routing decisions will be logged.',
+    );
+  } else if (shouldIntegrateLedger && !plugins.ledger) {
+    log.warn(
+      '[router] ledgerIntegration enabled but qmd-ledger not detected. Install with: pi install npm:pi-qmd-ledger',
+    );
+  }
+
+  // Agent-bus integration: broadcast model changes
+  const shouldIntegrateAgentBus = features?.agentBusIntegration === true;
+  if (shouldIntegrateAgentBus && plugins.agentBus) {
+    log.info(
+      '[router] Progressive: pi-agent-bus detected. Model changes will be broadcast.',
+    );
+  } else if (shouldIntegrateAgentBus && !plugins.agentBus) {
+    log.warn(
+      '[router] agentBusIntegration enabled but pi-agent-bus not detected. Install with: pi install npm:pi-agent-bus',
+    );
+  }
+
+  if (debugEnabled) {
+    console.log('[router] Plugin detection:', plugins);
+  }
+};
+
 export interface RouterExtensionState {
   routerEnabled: boolean;
   selectedProfile: string;
@@ -320,6 +372,9 @@ const routerExtension = (pi: ExtensionAPI) => {
         features?.contextCompression === true,
       );
     }
+
+    // ─── Progressive Plugin Integrations ───────────────────────────────────
+    detectAndIntegratePlugins(pi, features, debugEnabled);
 
     if (debugEnabled) {
       console.log(

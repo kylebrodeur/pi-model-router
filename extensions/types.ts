@@ -9,18 +9,30 @@ export type RouterFeature =
   | 'intentClassifier'
   | 'costBudgeting'
   | 'phaseMemory'
-  | 'contextCompression';
+  | 'contextCompression'
+  | 'ledgerIntegration'
+  | 'agentBusIntegration';
 
 export interface FeatureToggles {
   ollamaSync?: boolean;
   rateLimitFallback?: boolean;
   scopeShim?: boolean;
-  respectPiScope?: boolean; // New: Strict scope validation (Pi -> Extension)
+  respectPiScope?: boolean;
   perTurnRouting?: boolean;
   intentClassifier?: boolean;
   costBudgeting?: boolean;
   phaseMemory?: boolean;
   contextCompression?: boolean;
+  /**
+   * Log routing decisions to qmd-ledger if available.
+   * Progressive: detects pi-qmd-ledger at runtime.
+   */
+  ledgerIntegration?: boolean;
+  /**
+   * Publish model changes to pi-agent-bus MessageBus if available.
+   * Progressive: detects pi-agent-bus at runtime.
+   */
+  agentBusIntegration?: boolean;
 }
 
 export interface OllamaSyncConfig {

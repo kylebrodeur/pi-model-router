@@ -1,0 +1,15 @@
+{
+  "comment": "Progressive Step 2: Router with ledger + agent-bus integration. Enables agent coordination for model selection.",
+  "features": {
+    "ollamaSync": true,
+    "rateLimitFallback": true,
+    "scopeShim": true,
+    "perTurnRouting": true,
+    "intentClassifier": false,
+    "costBudgeting": true,
+    "phaseMemory": true,
+    "contextCompression": true,
+    "ledgerIntegration": true,
+    "agentBusIntegration": true
+  }
+}
