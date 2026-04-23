@@ -117,6 +117,18 @@ export const mergeConfig = (
     maxSessionBudget: override.maxSessionBudget ?? base.maxSessionBudget,
     rules: override.rules ?? base.rules,
     profiles: mergedProfiles,
+    features:
+      base.features || override.features
+        ? { ...base.features, ...override.features }
+        : undefined,
+    ollamaSync:
+      base.ollamaSync || override.ollamaSync
+        ? { ...base.ollamaSync, ...override.ollamaSync }
+        : undefined,
+    rateLimitFallback:
+      base.rateLimitFallback || override.rateLimitFallback
+        ? { ...base.rateLimitFallback, ...override.rateLimitFallback }
+        : undefined,
   };
 };
 
