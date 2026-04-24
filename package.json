@@ -12,7 +12,7 @@
     "extension"
   ],
   "license": "MIT",
-  "author": "Ye Liu (Forked by Kyle Brodeur)",
+  "author": "Kyle Brodeur <kylebrodeur@example.com> (https://github.com/kylebrodeur)",
   "repository": {
     "type": "git",
     "url": "https://github.com/kylebrodeur/pi-model-router.git"
@@ -21,6 +21,21 @@
   "bugs": {
     "url": "https://github.com/kylebrodeur/pi-model-router/issues"
   },
+  "files": [
+    "extensions/",
+    "docs/",
+    "model-router.example.json",
+    "model-router.ledger.json",
+    "model-router.agent-bus.json",
+    "model-router.essential.json",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "LEARNINGS.md",
+    "QUICKSTART.md",
+    "TESTING.md",
+    "CONTRIBUTING.md"
+  ],
   "exports": {
     ".": "./extensions/index.ts"
   },
@@ -37,12 +52,12 @@
   "peerDependencies": {
     "@mariozechner/pi-agent-core": "*",
     "@mariozechner/pi-ai": "*",
-    "@mariozechner/pi-coding-agent": ">=0.68.0",
+    "@mariozechner/pi-coding-agent": ">=0.70.2",
     "@mariozechner/pi-tui": "*",
-    "@sinclair/typebox": "*"
+    "typebox": "*"
   },
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "^0.68.0",
+    "@mariozechner/pi-coding-agent": "^0.70.2",
     "prettier": "^3.8.1",
     "typescript": "^6.0.2"
   }
