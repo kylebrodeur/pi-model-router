@@ -34,6 +34,7 @@ export interface FallbackState {
   autoRestore: boolean;
   triggeredAt?: number;
   triggerReason?: 'rate_limit' | 'budget_exceeded' | 'manual';
+  lastRestoreAttempt?: number;
 }
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -153,9 +154,13 @@ export const tryRestore = async (
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   contextCompressionEnabled: boolean = false,
-): Promise<{ success: boolean; message: string }> => {
+): Promise<{ success: boolean; message: string; restored: boolean }> => {
   if (!state.fallbackActive || !state.preferredModel) {
-    return { success: false, message: 'No preferred model stored' };
+    return {
+      success: false,
+      message: 'No preferred model stored',
+      restored: false,
+    };
   }
 
   const [provider, id] = state.preferredModel.split('/');
@@ -165,6 +170,7 @@ export const tryRestore = async (
     return {
       success: false,
       message: `Model ${state.preferredModel} not available`,
+      restored: false,
     };
   }
 
@@ -172,8 +178,8 @@ export const tryRestore = async (
   if (success) {
     state.fallbackActive = false;
     state.autoRestore = false;
+    state.lastRestoreAttempt = undefined;
 
-    // Context Compression Bridge: Instruct the model to summarize the fallback period
     if (contextCompressionEnabled) {
       pi.sendMessage(
         {
@@ -189,10 +195,45 @@ export const tryRestore = async (
 
   return {
     success,
+    restored: success,
     message: success
       ? `Restored ${state.preferredModel}`
       : 'Failed to restore model',
   };
+};
+
+/**
+ * Periodically check if the preferred cloud model is healthy and auto-restore.
+ * Call this from turn_end or another periodic hook.
+ */
+export const checkAndRestore = async (
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  contextCompressionEnabled: boolean = false,
+  restoreCheckIntervalSec: number = 300,
+): Promise<{ attempted: boolean; success: boolean; message: string }> => {
+  if (!state.autoRestore || !state.fallbackActive || !state.preferredModel) {
+    return {
+      attempted: false,
+      success: false,
+      message: 'Auto-restore not active',
+    };
+  }
+
+  const now = Date.now();
+  const intervalMs = restoreCheckIntervalSec * 1000;
+
+  if (state.lastRestoreAttempt && now - state.lastRestoreAttempt < intervalMs) {
+    return {
+      attempted: false,
+      success: false,
+      message: 'Restore throttled',
+    };
+  }
+
+  state.lastRestoreAttempt = now;
+  const result = await tryRestore(pi, ctx, contextCompressionEnabled);
+  return { attempted: true, ...result };
 };
 
 export const getFallbackState = (): FallbackState => {
@@ -224,6 +265,7 @@ export const resetRateLimitState = (): void => {
   state = {
     fallbackActive: false,
     autoRestore: false,
+    lastRestoreAttempt: undefined,
   };
   history = [];
 };

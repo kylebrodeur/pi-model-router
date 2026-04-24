@@ -25,7 +25,7 @@ import { registerCommands } from './commands';
 import { registerRouterProvider } from './provider';
 // ─── Feature modules (added by fork) ────────────────────────────────────────
 import { initializeOllamaSync } from './ollama-sync';
-import { initializeRateLimitFallback } from './rate-limit';
+import { initializeRateLimitFallback, checkAndRestore } from './rate-limit';
 
 // ─── Plugin Detection & Progressive Integration ──────────────────────────
 interface PluginStatus {
@@ -575,6 +575,28 @@ const routerExtension = (pi: ExtensionAPI) => {
         await setModelInternally(routerModel);
       }
     }
+
+    // Auto-restore from rate-limit fallback
+    const rateLimitCfg = (currentConfig.rateLimitFallback ?? {}) as Record<
+      string,
+      unknown
+    >;
+    if (rateLimitCfg.autoRestore === true) {
+      const result = await checkAndRestore(
+        pi,
+        ctx,
+        currentConfig.features?.contextCompression === true,
+        (rateLimitCfg.restoreCheckInterval as number) ?? 300,
+      );
+      if (result.attempted && result.success) {
+        ctx.ui.notify(`[Router] Auto-restored: ${result.message}`, 'info');
+        pi.appendEntry('router-auto-restore', {
+          restored: true,
+          message: result.message,
+        });
+      }
+    }
+
     persistState();
     actions.updateStatus(ctx);
   });
