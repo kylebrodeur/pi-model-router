@@ -28,6 +28,13 @@ export interface RateLimitEventEntry {
   httpStatus: number;
 }
 
+export interface ModelCapabilities {
+  vision: boolean;
+  reasoning: boolean;
+  contextWindow: number;
+  maxTokens: number;
+}
+
 export interface FallbackState {
   preferredModel?: string;
   fallbackActive: boolean;
@@ -35,6 +42,7 @@ export interface FallbackState {
   triggeredAt?: number;
   triggerReason?: 'rate_limit' | 'budget_exceeded' | 'manual';
   lastRestoreAttempt?: number;
+  requiredCapabilities?: ModelCapabilities;
 }
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -59,21 +67,56 @@ let history: RateLimitEventEntry[] = [];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+const getModelCapabilities = (model: {
+  input: string[];
+  reasoning: boolean;
+  contextWindow: number;
+  maxTokens: number;
+}): ModelCapabilities => ({
+  vision: model.input.includes('image'),
+  reasoning: model.reasoning,
+  contextWindow: model.contextWindow,
+  maxTokens: model.maxTokens,
+});
+
+const capabilitiesMatch = (
+  required: ModelCapabilities,
+  candidate: ModelCapabilities,
+): { match: boolean; missing: string[] } => {
+  const missing: string[] = [];
+  if (required.vision && !candidate.vision) missing.push('vision');
+  if (required.reasoning && !candidate.reasoning) missing.push('reasoning');
+  if (candidate.contextWindow < required.contextWindow)
+    missing.push(
+      `contextWindow ${candidate.contextWindow} < ${required.contextWindow}`,
+    );
+  if (candidate.maxTokens < required.maxTokens)
+    missing.push(`maxTokens ${candidate.maxTokens} < ${required.maxTokens}`);
+  return { match: missing.length === 0, missing };
+};
+
 const findBestFallbackModel = (
   ctx: ExtensionContext,
   sequence: string[],
-): { provider: string; id: string } | undefined => {
+  required?: ModelCapabilities,
+): { provider: string; id: string; missing?: string[] } | undefined => {
   const availableModels = ctx.modelRegistry.getAvailable();
 
   for (const pattern of sequence) {
     for (const model of availableModels) {
       const targetId = `${model.provider}/${model.id}`;
-      if (pattern === targetId)
+      if (
+        pattern === targetId ||
+        (pattern.endsWith('*') && targetId.startsWith(pattern.slice(0, -1)))
+      ) {
+        if (required) {
+          const caps = getModelCapabilities(model);
+          const { match, missing } = capabilitiesMatch(required, caps);
+          if (!match) {
+            return { provider: model.provider, id: model.id, missing };
+          }
+        }
         return { provider: model.provider, id: model.id };
-      if (pattern.endsWith('*')) {
-        const prefix = pattern.slice(0, -1);
-        if (targetId.startsWith(prefix))
-          return { provider: model.provider, id: model.id };
       }
     }
   }
@@ -98,15 +141,24 @@ export const tryFallback = async (
 
   if (currentModel.provider !== 'ollama' && !state.fallbackActive) {
     state.preferredModel = `${currentModel.provider}/${currentModel.id}`;
+    state.requiredCapabilities = getModelCapabilities(currentModel);
   }
 
   const target = findBestFallbackModel(
     ctx,
     config.fallbackSequence.length > 0 ? config.fallbackSequence : ['ollama/*'],
+    state.requiredCapabilities,
   );
 
   if (!target) {
     return { success: false, message: 'No fallback models available' };
+  }
+
+  if (target.missing) {
+    return {
+      success: false,
+      message: `Fallback model ${target.provider}/${target.id} lacks required capabilities: ${target.missing.join(', ')}`,
+    };
   }
 
   const targetModel = ctx.modelRegistry.find(target.provider, target.id);
@@ -179,6 +231,7 @@ export const tryRestore = async (
     state.fallbackActive = false;
     state.autoRestore = false;
     state.lastRestoreAttempt = undefined;
+    state.requiredCapabilities = undefined;
 
     if (contextCompressionEnabled) {
       pi.sendMessage(
@@ -266,6 +319,7 @@ export const resetRateLimitState = (): void => {
     fallbackActive: false,
     autoRestore: false,
     lastRestoreAttempt: undefined,
+    requiredCapabilities: undefined,
   };
   history = [];
 };
