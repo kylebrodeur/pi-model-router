@@ -102,6 +102,10 @@ const findBestFallbackModel = (
 ): { provider: string; id: string; missing?: string[] } | undefined => {
   const availableModels = ctx.modelRegistry.getAvailable();
 
+  let bestPartialMatch:
+    | { provider: string; id: string; missing: string[] }
+    | undefined;
+
   for (const pattern of sequence) {
     for (const model of availableModels) {
       const targetId = `${model.provider}/${model.id}`;
@@ -112,16 +116,23 @@ const findBestFallbackModel = (
         if (required) {
           const caps = getModelCapabilities(model);
           const { match, missing } = capabilitiesMatch(required, caps);
-          if (!match) {
-            return { provider: model.provider, id: model.id, missing };
+          if (match) {
+            return { provider: model.provider, id: model.id };
+          } else if (!bestPartialMatch) {
+            bestPartialMatch = {
+              provider: model.provider,
+              id: model.id,
+              missing,
+            };
           }
+        } else {
+          return { provider: model.provider, id: model.id };
         }
-        return { provider: model.provider, id: model.id };
       }
     }
   }
 
-  return undefined;
+  return bestPartialMatch;
 };
 
 // ─── Public API ─────────────────────────────────────────────────────────────
