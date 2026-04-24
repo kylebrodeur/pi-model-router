@@ -1,10 +1,10 @@
-# TODO — Pi Model Router Fork
+# TODO — Pi Model Router
 
 ## Completed ✅
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Update Pi to 0.68+ (`after_provider_response`) | ✅ |
+| 1 | Update Pi to 0.70.2 (`after_provider_response`) | ✅ |
 | 2 | Remove `@ts-expect-error` workaround | ✅ |
 | 3 | Replace `require()` with ESM imports | ✅ |
 | 4 | Convert function statements to arrow functions | ✅ |
@@ -14,107 +14,99 @@
 | 8 | TypeScript strict compilation | ✅ 0 errors |
 | 9 | Scope shim (`setScopedModels` workaround) | ✅ `extensions/scope-shim.ts` |
 | 10 | Upstream API issue | ✅ [#3535](https://github.com/badlogic/pi-mono/issues/3535) |
-| 11 | Progressive Enhancement | ✅ Plugin detection (`detectPlugins`) + conditional integration with qmd-ledger and pi-agent-bus |
+| 11 | Progressive Enhancement | ✅ Plugin detection (`detectPlugins`) + conditional integration |
 | 12 | Progressive Configs | ✅ `model-router.ledger.json`, `model-router.agent-bus.json`, `model-router.essential.json` |
+| 13 | Update README for public repo | ✅ Merged README_FORK.md, added badges, feature tables |
+| 14 | GitHub repo metadata | ✅ Description, topics, wiki/projects disabled |
+| 15 | Add CHANGELOG.md | ✅ |
+| 16 | Add CODE_OF_CONDUCT.md | ✅ |
+| 17 | Add GitHub templates | ✅ Issue + PR templates |
+| 18 | Add LEARNINGS.md | ✅ Development insights doc |
+| 19 | Update package.json for release | ✅ `files`, `author`, peer deps, typebox |
 
 ---
 
-## Ready to Test & Publish
+## Next Steps
 
-### Install Locally (Pre-Publish Test)
+### Pre-Publish Verification
+
+Before publishing, run these checks:
 
 ```bash
-pi install git:github.com/kylebrodeur/pi-model-router@main
+# 1. TypeScript
+npm run tsc
 
-# Create default config
+# 2. Formatting
+npx prettier --check extensions/*.ts
+
+# 3. No any/require/console leakage
+grep -rn ": any\\b" extensions/ || echo "Clean"
+grep -rn "require(" extensions/ || echo "Clean"
+grep -rn "console\.log" extensions/ || echo "Clean"
+```
+
+### Publish to npm
+
+```bash
+# 1. Bump version
+npm version patch   # or minor / major
+
+# 2. Verify package contents
+npm pack --dry-run
+
+# 3. Publish
+npm publish --access public
+
+# 4. Tag on GitHub
+git tag v$(node -p "require('./package.json').version")
+git push origin --tags
+
+# 5. Create GitHub release
+gh release create v$(node -p "require('./package.json').version") \
+  --title "v$(node -p "require('./package.json').version")" \
+  --notes-file CHANGELOG.md
+```
+
+### Post-Publish Testing
+
+Test the published package in a fresh Pi session:
+
+```bash
+# Clean install
+pi install npm:@kylebrodeur/pi-model-router
+
+# Create config
 /router init
-```
 
-### Testing Checklist
-
-Run these in a fresh Pi session:
-
-```
-/reload
-/new
-/router init            # Create default config
-/router status          # Should show enabled, correct profiles
-/router config          # Should list features
-/router ollama-sync     # Should sync Ollama models (if Ollama running)
-/router profile auto    # Switch profiles
-/router pin high        # Pin tier
-/router fix medium      # Fix last decision
-/router debug on        # Enable debug logging
-/router widget on       # Enable status widget
-/router reload          # Hot-reload config
-/router disable         # Disable router
-/router scope apply     # Sync router profiles to Pi enabled models
+# Run full command checklist
+/router status
+/router config
+/router ollama-sync
+/router profile auto
+/router pin high
+/router fix medium
+/router debug on
+/router widget on
+/router reload
+/router scope apply
+/router scope show
+/router disable
 ```
 
 **Verify:**
-- [x] No `console.log` noise in stdout on init
-- [x] No TypeScript errors on `/reload`
-- [x] `/router status` shows features: `ollamaSync=on`, `rateLimit=on`
-- [x] Ollama sync runs on session start (if `onStartup: true`)
-- [x] Rate-limit fallback handler registers silently
-- [x] Debug output visible only when `/router debug on`
-- [x] Fallback status shows in footer when active (`🏠 fallback`)
+- [ ] No TypeScript errors on `/reload`
+- [ ] `/router status` shows correct profiles and features
+- [ ] Ollama sync works (if enabled and Ollama running)
+- [ ] Rate-limit fallback handler registers silently
+- [ ] Debug output visible only when `/router debug on`
+- [ ] Scope commands work (`apply`, `show`, `reset`)
+- [ ] Install from npm works cleanly (no devDependencies needed)
 
-### Run Static Checks
+### Post-Publish Documentation
 
-```bash
-cd ~/projects/pi-model-router-forked
-
-# TypeScript
-./node_modules/.bin/tsc --noEmit
-
-# Formatting
-./node_modules/.bin/prettier --check extensions/*.ts
-
-# No console leakage (should only show the gated debug log in index.ts)
-grep -rn "console\." extensions/ || echo "Clean"
-```
-
-*Note: All static checks have been run and passed. (✅)*
-
----
-
-## Publishing Steps
-
-### 1. Version Bump
-
-```bash
-# Update version in package.json before each release
-npm version patch   # or minor / major
-```
-
-### 2. Pre-Publish Verification
-
-```bash
-npm run tsc         # Ensure TypeScript compiles
-npm run build       # Optional: emit .js if needed
-```
-
-### 3. Publish to npm
-
-```bash
-npm publish --access public
-```
-
-### 4. Tag Release on GitHub
-
-```bash
-git tag v$(node -p "require('./package.json').version")
-git push origin --tags
-```
-
-### 5. Upstream PRs (when ready)
-
-See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
-
-1. **feature/feature-toggles** → `yeliu84/pi-model-router:main`
-2. **feature/ollama-sync** → `yeliu84/pi-model-router:main`
-3. **feature/rate-limit** → `yeliu84/pi-model-router:main`
+- [ ] Update README to point to npm badge once first publish completes
+- [ ] Announce in relevant Discord/Slack/forums
+- [ ] Update `LEARNINGS.md` with any new insights from publish process
 
 ---
 
@@ -122,7 +114,7 @@ See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
 
 | Gate | Command | Expected | Status |
 |------|---------|----------|--------|
-| TypeScript strict | `npx tsc --noEmit` | 0 errors | ✅ |
+| TypeScript strict | `npm run tsc` | 0 errors | ✅ |
 | Prettier | `npx prettier --check extensions/*.ts` | All clean | ✅ |
 | No `any` types | `grep -rn ": any\\b" extensions/` | Empty | ✅ |
 | No `require()` | `grep -rn "require(" extensions/` | Empty | ✅ |
@@ -143,14 +135,13 @@ See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
 
 ---
 
-## Branches Reference
+## Upstream PRs (when ready)
 
-| Branch | Built From | Contains |
-|--------|-----------|----------|
-| `main` | upstream + all features | Ready to use today |
-| `feature/feature-toggles` | upstream + types + config | PR 1 |
-| `feature/ollama-sync` | upstream + types + config + ollama | PR 2 |
-| `feature/rate-limit` | upstream + types + config + rate-limit | PR 3 |
+See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
+
+1. **feature/feature-toggles** → `yeliu84/pi-model-router:main`
+2. **feature/ollama-sync** → `yeliu84/pi-model-router:main`
+3. **feature/rate-limit** → `yeliu84/pi-model-router:main`
 
 ---
 
@@ -158,12 +149,16 @@ See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
 
 | File | Purpose |
 |------|---------|
+| `README.md` | Project overview, install, config, commands |
+| `CHANGELOG.md` | Version history |
+| `LEARNINGS.md` | Development insights and best practices |
 | `TESTING.md` | Full testing checklist |
 | `CONTRIBUTING.md` | Upstream PR strategy |
-| `README_FORK.md` | Fork documentation |
 | `QUICKSTART.md` | 6-step install guide |
+| `CODE_OF_CONDUCT.md` | Community guidelines |
 | `extensions/ollama-sync.ts` | Ollama sync module |
 | `extensions/rate-limit.ts` | Rate limit fallback module |
+| `extensions/scope-shim.ts` | Scoped models shim |
 
 ---
 
@@ -178,3 +173,5 @@ See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
 | Console logging gated/removed | ✅ |
 | Ready to install in Pi | ✅ |
 | Ready to publish | ✅ |
+| Repo metadata set | ✅ |
+| GitHub templates added | ✅ |
