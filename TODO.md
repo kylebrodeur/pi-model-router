@@ -23,94 +23,55 @@
 | 17 | Add GitHub templates | ✅ Issue + PR templates |
 | 18 | Add LEARNINGS.md | ✅ Development insights doc |
 | 19 | Update package.json for release | ✅ `files`, `author`, peer deps, typebox |
+| 20 | Create GitHub release v0.1.2 | ✅ [Release page](https://github.com/kylebrodeur/pi-model-router/releases/tag/v0.1.2) |
+| 21 | Publish to npm | ✅ `@kylebrodeur/pi-model-router@0.1.2` |
 
 ---
 
-## Next Steps
+## Post-Publish Verification
 
-### Pre-Publish Verification
-
-Before publishing, run these checks:
-
-```bash
-# 1. TypeScript
-npm run tsc
-
-# 2. Formatting
-npx prettier --check extensions/*.ts
-
-# 3. No any/require/console leakage
-grep -rn ": any\\b" extensions/ || echo "Clean"
-grep -rn "require(" extensions/ || echo "Clean"
-grep -rn "console\.log" extensions/ || echo "Clean"
-```
-
-### Publish to npm
-
-```bash
-# 1. Bump version
-npm version patch   # or minor / major
-
-# 2. Verify package contents
-npm pack --dry-run
-
-# 3. Publish
-npm publish --access public
-
-# 4. Tag on GitHub
-git tag v$(node -p "require('./package.json').version")
-git push origin --tags
-
-# 5. Create GitHub release
-gh release create v$(node -p "require('./package.json').version") \
-  --title "v$(node -p "require('./package.json').version")" \
-  --notes-file CHANGELOG.md
-```
-
-### Post-Publish Testing
-
-Test the published package in a fresh Pi session:
-
-```bash
-# Clean install
-pi install npm:@kylebrodeur/pi-model-router
-
-# Create config
-/router init
-
-# Run full command checklist
-/router status
-/router config
-/router ollama-sync
-/router profile auto
-/router pin high
-/router fix medium
-/router debug on
-/router widget on
-/router reload
-/router scope apply
-/router scope show
-/router disable
-```
-
-**Verify:**
-- [ ] No TypeScript errors on `/reload`
-- [ ] `/router status` shows correct profiles and features
-- [ ] Ollama sync works (if enabled and Ollama running)
-- [ ] Rate-limit fallback handler registers silently
-- [ ] Debug output visible only when `/router debug on`
-- [ ] Scope commands work (`apply`, `show`, `reset`)
-- [ ] Install from npm works cleanly (no devDependencies needed)
-
-### Post-Publish Documentation
-
-- [ ] Update README to point to npm badge once first publish completes
-- [ ] Announce in relevant Discord/Slack/forums
-- [ ] Update `LEARNINGS.md` with any new insights from publish process
+| Check | Status |
+|-------|--------|
+| TypeScript compiles | ✅ 0 errors |
+| Formatting clean | ✅ |
+| No any/require/console leakage | ✅ |
+| Package contents correct (`npm pack`) | ✅ 26 files, 45 KB |
+| GitHub release created | ✅ v0.1.2 |
+| npm package published | ✅ `@kylebrodeur/pi-model-router@0.1.2` |
+| README npm badge active | ✅ |
 
 ---
 
-## Code Quality Gates (Pre-Publish)
+## Backlog — Ready for Review
+
+These are the next potential features to implement. **Review and rank** before starting any.
+
+### Medium Priority
+
+| # | Feature | Description | Complexity |
+|---|---------|-------------|------------|
+| B1 | **Auto-restore from fallback** | When cloud API recovers (health check or next turn succeeds), automatically switch back from fallback/Ollama to the primary model. Avoids leaving the user on local models indefinitely. | Medium |
+| B2 | **Smart fallback selection** | Match task capabilities (vision, reasoning, JSON mode) to available fallback models. Don't fall back to a model that can't handle the current task type. | Medium |
+
+### Low Priority
+
+| # | Feature | Description | Complexity |
+|---|---------|-------------|------------|
+| B3 | **Per-profile Ollama models** | Allow different Ollama models per router profile (e.g., `cheap` profile uses `phi4`, `deep` profile uses `deepseek-r1:14b`). | Low |
+| B4 | **Rate limit dashboard** | `/router rate-limit show` with a TUI widget/graph showing fallback history, timestamps, and recovery attempts. | Low |
+| B5 | **Config UI wizard** | Interactive `/router config setup` command that walks users through creating their first `model-router.json` with prompts instead of hand-editing JSON. | Low |
+
+### Meta / Non-Code
+
+| # | Task | Description |
+|---|------|-------------|
+| M1 | **Announce release** | Post to relevant Discord/Slack/forums about v0.1.2 |
+| M2 | **Upstream PRs** | Split fork changes into upstream-friendly PRs (`feature/feature-toggles`, `feature/ollama-sync`, `feature/rate-limit`) |
+| M3 | **Update LEARNINGS.md** | Add insights from publish process |
+
+---
+
+## Code Quality Gates
 
 | Gate | Command | Expected | Status |
 |------|---------|----------|--------|
@@ -120,28 +81,6 @@ pi install npm:@kylebrodeur/pi-model-router
 | No `require()` | `grep -rn "require(" extensions/` | Empty | ✅ |
 | No stray `console.log` | `grep -rn "console\.log" extensions/` | Only gated debug in `index.ts` | ✅ |
 | Arrow functions only | `grep -rn "function " extensions/ \| grep -v "=>"` | Empty | ✅ |
-
----
-
-## Future Enhancements (Backlog)
-
-| Feature | Priority | Notes |
-|---------|----------|-------|
-| Auto-restore from fallback | Medium | When cloud API recovers, auto-switch back |
-| Smart fallback selection | Medium | Match capabilities (vision, reasoning) to task |
-| Per-profile ollama models | Low | Different Ollama models per router profile |
-| Rate limit dashboard | Low | `/router rate-limit show` with history graph |
-| Config UI wizard | Low | Interactive `/router config setup` |
-
----
-
-## Upstream PRs (when ready)
-
-See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
-
-1. **feature/feature-toggles** → `yeliu84/pi-model-router:main`
-2. **feature/ollama-sync** → `yeliu84/pi-model-router:main`
-3. **feature/rate-limit** → `yeliu84/pi-model-router:main`
 
 ---
 
@@ -169,9 +108,8 @@ See `CONTRIBUTING.md` for branch split strategy. Recommended PR order:
 | TypeScript compiles (all branches) | ✅ 0 errors |
 | Commands scoped under `/router` | ✅ |
 | Runtime config via `/router config` | ✅ |
-| Upstream feature branches clean | ✅ |
 | Console logging gated/removed | ✅ |
 | Ready to install in Pi | ✅ |
-| Ready to publish | ✅ |
+| Published on npm | ✅ |
 | Repo metadata set | ✅ |
 | GitHub templates added | ✅ |
