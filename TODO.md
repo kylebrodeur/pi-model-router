@@ -28,6 +28,16 @@
 
 ---
 
+## Current Work (Maintenance Review)
+
+- [x] Review context-management skill and notes/ledger to understand the repository.
+- [x] Investigate `extensions/index.ts` runtime error (`Cannot read properties of undefined (reading 'warn')`). Fixed by adding safety check (`pi.log || console`).
+- [x] Check for upstream updates from the fork source. No new updates from `origin/main`.
+- [x] Check for Pi package updates. Package `@mariozechner/pi-coding-agent` is at the latest (`0.70.2`).
+- [x] Lint, typecheck, build, and test. `npm run tsc` passes.
+
+---
+
 ## Post-Publish Verification
 
 | Check | Status |
@@ -42,31 +52,35 @@
 
 ---
 
-## Backlog — Ready for Review
+## Backlog — Ready for Review (POST-KAGGLE)
 
-These are the next potential features to implement. **Review and rank** before starting any.
+**Note:** As per the [Agent Operating Principles](~/projects/microfactory/docs/_kaggle/07-AGENT-OPERATING-PRINCIPLES.md), full `pi-model-router` integration and extensive new features here are currently **OUT OF SCOPE** for the Kaggle Sprint deadline (May 18). Any work done here must pass *The One Test*: does it directly help the 3-minute video demo?
 
-### Medium Priority
+Because the demo relies on a specific `gemma-demo` scenario and simple two-tier routing (rather than the full router framework), all feature work below is paused and logged for post-Kaggle development.
 
-| # | Feature | Description | Complexity |
-|---|---------|-------------|------------|
-| B1 | **Auto-restore from fallback** | When cloud API recovers (health check or next turn succeeds), automatically switch back from fallback/Ollama to the primary model. Avoids leaving the user on local models indefinitely. | Medium |
-| B2 | **Smart fallback selection** | Match task capabilities (vision, reasoning, JSON mode) to available fallback models. Don't fall back to a model that can't handle the current task type. | Medium |
-
-### Low Priority
+### Paused / Future Work (Post-Kaggle)
 
 | # | Feature | Description | Complexity |
 |---|---------|-------------|------------|
-| B3 | **Per-profile Ollama models** | Allow different Ollama models per router profile (e.g., `cheap` profile uses `phi4`, `deep` profile uses `deepseek-r1:14b`). | Low |
-| B4 | **Rate limit dashboard** | `/router rate-limit show` with a TUI widget/graph showing fallback history, timestamps, and recovery attempts. | Low |
-| B5 | **Config UI wizard** | Interactive `/router config setup` command that walks users through creating their first `model-router.json` with prompts instead of hand-editing JSON. | Low |
+| B1 | **Auto-restore from fallback** | When cloud API recovers, automatically switch back from fallback/Ollama to primary. | Medium |
+| B2 | **Smart fallback selection** | Match task capabilities (vision, reasoning) to available fallback models. | Medium |
+| B3 | **Per-profile Ollama models** | Allow different Ollama models per router profile. | Low |
+| B4 | **Rate limit dashboard** | `/router rate-limit show` TUI widget. | Low |
+| B5 | **Config UI wizard** | Interactive `/router config setup` command. | Low |
+
+### Approved Microfactory Connections (Kaggle Scope)
+
+| # | Task | Description |
+|---|------|-------------|
+| K1 | **Document Routing Patterns** | Note how `pi-model-router` fallback and tier logic can inform the Microfactory two-tier `GemmaAgent` model selection (Log in `FUTURE-WORK-LOG.md` or Microfactory docs). |
+| K2 | **Maintain Stability** | Only merge critical bug fixes (like the `index.ts` crash) that unblock local development across the ecosystem. |
 
 ### Meta / Non-Code
 
 | # | Task | Description |
 |---|------|-------------|
-| M1 | **Announce release** | Post to relevant Discord/Slack/forums about v0.1.2 |
-| M2 | **Upstream PRs** | Split fork changes into upstream-friendly PRs (`feature/feature-toggles`, `feature/ollama-sync`, `feature/rate-limit`) |
+| M1 | **Announce release** | Post to relevant Discord/Slack/forums about v0.1.2 (Post-Kaggle) |
+| M2 | **Upstream PRs** | Split fork changes into upstream-friendly PRs (Post-Kaggle) |
 | M3 | **Update LEARNINGS.md** | Add insights from publish process |
 
 ---

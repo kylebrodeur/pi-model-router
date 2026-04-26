@@ -35,7 +35,7 @@ interface PluginStatus {
 
 const detectPlugins = (pi: ExtensionAPI): PluginStatus => {
   const tools = (pi as any).tools ?? {};
-  const log = (pi as any).log;
+  const log = (pi as any).log || console;
   return {
     ledger: typeof tools.append_ledger === 'function',
     agentBus: typeof tools.link_send === 'function',
@@ -48,7 +48,7 @@ const detectAndIntegratePlugins = (
   debugEnabled: boolean,
 ) => {
   const plugins = detectPlugins(pi);
-  const log = (pi as any).log;
+  const log = (pi as any).log || console;
 
   // Ledger integration: log routing decisions to qmd-ledger
   const shouldIntegrateLedger = features?.ledgerIntegration === true;
