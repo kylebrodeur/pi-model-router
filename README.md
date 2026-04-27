@@ -121,6 +121,30 @@ Copy the example config to one of:
 
 **Priority:** Project config `.pi/model-router.json` overrides user config `~/.pi/agent/model-router.json`. Both override defaults.
 
+### Rate Limit Interception & Fallback
+
+The router can gracefully handle 429 Rate Limit and Quota errors. If the error specifies a wait time (e.g., "reset after 58s"), the router will pause and automatically retry the prompt if the wait time is under your threshold. If it exceeds the threshold or is unparseable, it fails over to the next available model in your fallback sequence.
+
+```json
+{
+  "rateLimitFallback": {
+    "enabled": true,
+    "shortDelayThreshold": 60,
+    "autoFallback": true,
+    "autoRestore": true,
+    "restoreCheckInterval": 300,
+    "fallbackSequence": ["anthropic/claude-3-haiku-20240307", "ollama/*"]
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `shortDelayThreshold` | Maximum time (in seconds) the router will pause and wait to retry when encountering a rate limit. If the cooldown is longer than this, it triggers a fallback. |
+| `fallbackSequence` | Array of model IDs (or wildcards like `ollama/*`) to try if the primary model fails or the wait time is too long. |
+| `autoFallback` | (Optional) Automatically switch session to the fallback model globally after a hard failure. |
+| `autoRestore` | (Optional) If fallback was triggered, automatically try to restore the original cloud model after `restoreCheckInterval` seconds. |
+
 ### Progressive Enhancement Configs
 
 After installing optional extensions, copy one of these to `.pi/model-router.json`:

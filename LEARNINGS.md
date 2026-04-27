@@ -73,10 +73,11 @@ The fallback mechanism uses a user-configurable sequence of models: `fallbackSeq
 *   **Key benefit**: Prevents catastrophic failures when a primary model is unavailable.
 
 ### 3. Graceful Error Handling
-The extension transparently handles errors. For "out of credits" (`402`) or "rate limit" (`429`), it automatically switches to a fallback model and emits a custom session entry (`router-fallback`) for headless tooling to detect.
+The extension transparently handles errors. For "out of credits" (`402`) or "rate limit" (`429`), it automatically switches to a fallback model and emits a custom session entry (`router-fallback`) for headless tooling to detect. 
+Additionally, for string-based 429 errors specifying a cooldown (e.g., "quota will reset after 58s"), the router can intercept the stream, pause for the required duration (if under `shortDelayThreshold`), and automatically retry the original request without failing the turn.
 
 *   **When to use**: For any extension exposed to external API services.
-*   **Key insight**: Never mask API errors; provide enough detail (status codes) in UI notifications for users to diagnose.
+*   **Key insight**: Never mask API errors; provide enough detail (status codes) in UI notifications for users to diagnose, but handle transient issues (like short rate limits) invisibly where possible.
 
 ## 🔌 Pi Integration Patterns
 

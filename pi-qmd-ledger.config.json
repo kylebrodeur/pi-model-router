@@ -1,0 +1,12 @@
+{
+  "ledgers": {
+    "main": {
+      "dedupField": "fact",
+      "schema": [
+        "fact",
+        "context"
+      ],
+      "path": "ledger/main.jsonl"
+    }
+  }
+}

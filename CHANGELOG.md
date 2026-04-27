@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Transparent wait and retry interception for string-based rate limit errors (e.g., "quota will reset after X seconds")
 - Ollama auto-sync feature
 - Rate-limit fallback with transparent HTTP error handling (402, 429, 503, 529)
 - Feature toggles in config (`features` object)

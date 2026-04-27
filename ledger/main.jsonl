@@ -1,0 +1,1 @@
+{"fact":"Text-based 429 errors (e.g., 'quota will reset after X seconds') can be intercepted from the model stream by the extension. The extension can pause for the required duration and automatically retry the original request transparently.","context":"Rate limiting in pi model extensions"}

@@ -30,6 +30,20 @@ import {
   hasImageAttachment,
 } from './routing';
 
+const rateLimitRegex = /(?:429|rate limit|quota).*?(?:reset after|try again in|wait)\s*(\d+)\s*([smh])/i;
+
+function extractWaitTimeMs(errorText: string): number | null {
+  const match = errorText.match(rateLimitRegex);
+  if (!match) return null;
+  const value = parseInt(match[1], 10);
+  const unit = match[2].toLowerCase();
+  
+  if (unit === 's') return value * 1000;
+  if (unit === 'm') return value * 60000;
+  if (unit === 'h') return value * 3600000;
+  return null;
+}
+
 export const createErrorMessage = (
   model: Model<Api>,
   message: string,
@@ -457,74 +471,109 @@ export const registerRouterProvider = (
             const apiKey = auth.apiKey;
             const headers = auth.headers;
 
-            try {
-              // HONESTY CHECK & AUTO-TRUNCATION
-              // If the picked model has a smaller context than what we reported, truncate now.
-              let effectiveContext = context;
-              const targetLimit = targetModel.contextWindow || 128_000;
-              if (targetLimit < model.contextWindow!) {
-                effectiveContext = truncateContext(context, targetLimit);
-              }
+            let retryCount = 0;
+            let modelSuccess = false;
 
-              const thinkingOverride = actions.getThinkingOverride(
-                model.id,
-                decision.tier,
-              );
-              const delegatedReasoning =
-                targetModel.reasoning &&
-                (thinkingOverride ?? decision.thinking) !== 'off'
-                  ? (thinkingOverride ?? decision.thinking)
-                  : undefined;
-
-              if (state.lastExtensionContext) {
-                if (delegatedReasoning) {
-                  state.lastExtensionContext.ui.setHiddenThinkingLabel?.(
-                    `Thinking (${targetProvider}/${targetModelId})...`,
-                  );
-                } else {
-                  state.lastExtensionContext.ui.setHiddenThinkingLabel?.();
-                }
-              }
-
-              const delegatedStream = streamSimple(
-                targetModel,
-                effectiveContext,
-                {
-                  ...options,
-                  apiKey,
-                  headers,
-                  ...(delegatedReasoning
-                    ? { reasoning: delegatedReasoning }
-                    : {}),
-                },
-              );
-
+            while (retryCount < 2) {
               let contentReceived = false;
-              for await (const event of delegatedStream) {
-                if (event.type === 'done') {
-                  const cost = event.message.usage?.cost?.total ?? 0;
-                  state.accumulatedCost += cost;
+              try {
+                // HONESTY CHECK & AUTO-TRUNCATION
+                // If the picked model has a smaller context than what we reported, truncate now.
+                let effectiveContext = context;
+                const targetLimit = targetModel.contextWindow || 128_000;
+                if (targetLimit < model.contextWindow!) {
+                  effectiveContext = truncateContext(context, targetLimit);
                 }
-                if (event.type === 'error' && !contentReceived) {
-                  throw new Error(
-                    (event as any).error?.errorMessage ||
-                      'Model failed before sending content.',
-                  );
+
+                const thinkingOverride = actions.getThinkingOverride(
+                  model.id,
+                  decision.tier,
+                );
+                const delegatedReasoning =
+                  targetModel.reasoning &&
+                  (thinkingOverride ?? decision.thinking) !== 'off'
+                    ? (thinkingOverride ?? decision.thinking)
+                    : undefined;
+
+                if (state.lastExtensionContext) {
+                  if (delegatedReasoning) {
+                    state.lastExtensionContext.ui.setHiddenThinkingLabel?.(
+                      `Thinking (${targetProvider}/${targetModelId})...`,
+                    );
+                  } else {
+                    state.lastExtensionContext.ui.setHiddenThinkingLabel?.();
+                  }
                 }
-                const isContent =
-                  event.type === 'text_delta' ||
-                  event.type === 'thinking_delta' ||
-                  event.type === 'toolcall_delta' ||
-                  event.type === 'toolcall_end';
-                if (isContent) contentReceived = true;
-                stream.push(event);
+
+                const delegatedStream = streamSimple(
+                  targetModel,
+                  effectiveContext,
+                  {
+                    ...options,
+                    apiKey,
+                    headers,
+                    ...(delegatedReasoning
+                      ? { reasoning: delegatedReasoning }
+                      : {}),
+                  },
+                );
+
+                for await (const event of delegatedStream) {
+                  if (event.type === 'done') {
+                    const cost = event.message.usage?.cost?.total ?? 0;
+                    state.accumulatedCost += cost;
+                  }
+                  if (event.type === 'error' && !contentReceived) {
+                    throw new Error(
+                      (event as any).error?.errorMessage ||
+                        'Model failed before sending content.',
+                    );
+                  }
+                  const isContent =
+                    event.type === 'text_delta' ||
+                    event.type === 'thinking_delta' ||
+                    event.type === 'toolcall_delta' ||
+                    event.type === 'toolcall_end';
+                  if (isContent) contentReceived = true;
+                  stream.push(event);
+                }
+                modelSuccess = true;
+                success = true;
+                if (i > 0) decision.isFallback = true;
+                break; // break the retry loop
+              } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                const waitMs = extractWaitTimeMs(errMsg);
+                const maxWaitMs = (state.currentConfig.rateLimitFallback?.shortDelayThreshold ?? 60) * 1000;
+
+                if (waitMs && waitMs <= maxWaitMs && retryCount === 0 && !contentReceived) {
+                  const partialMsg = {
+                    role: 'assistant',
+                    content: [],
+                    api: model.api,
+                    provider: targetProvider,
+                    model: targetModelId,
+                    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+                    timestamp: Date.now(),
+                  } as unknown as AssistantMessage;
+
+                  stream.push({
+                    type: 'text_delta',
+                    contentIndex: 0,
+                    delta: `\n_⏳ [Router] Rate limit reached on ${targetProvider}/${targetModelId}. Waiting ${Math.ceil(waitMs/1000)}s before retrying..._\n`,
+                    partial: partialMsg
+                  });
+                  await new Promise(resolve => setTimeout(resolve, waitMs + 1000)); // buffer 1s
+                  retryCount++;
+                  continue; // try the same model again
+                }
+
+                lastError = err;
+                break; // model failed completely, break retry loop to go to next fallback model
               }
-              success = true;
-              if (i > 0) decision.isFallback = true;
-              break;
-            } catch (err) {
-              lastError = err;
             }
+
+            if (modelSuccess) break; // break fallback loop
           }
 
           if (!success) {
