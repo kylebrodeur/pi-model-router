@@ -2,10 +2,10 @@ import {
   getAgentDir,
   type ExtensionAPI,
   type ExtensionContext,
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AutocompleteItem } from '@mariozechner/pi-tui';
+import type { AutocompleteItem } from '@earendil-works/pi-tui';
 import type {
   RouterConfig,
   RouterPinByProfile,

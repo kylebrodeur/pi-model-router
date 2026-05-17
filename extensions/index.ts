@@ -1,7 +1,7 @@
 import type {
   ExtensionAPI,
   ExtensionContext,
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 import {
   type RouterConfig,
   type RouterPersistedState,
@@ -34,11 +34,25 @@ interface PluginStatus {
 }
 
 const detectPlugins = (pi: ExtensionAPI): PluginStatus => {
-  const tools = (pi as any).tools ?? {};
   const log = (pi as any).log || console;
+
+  // Pi v0.74.1+: tools are exposed via pi.getAllTools() returning { name, description, ... }[]
+  // Legacy Pi versions exposed tools as pi.tools.<name>() directly.
+  let allTools: { name: string }[] = [];
+  try {
+    allTools = (pi as any).getAllTools?.() ?? [];
+  } catch {
+    allTools = [];
+  }
+
+  const legacyTools = (pi as any).tools ?? {};
+  const hasTool = (name: string) =>
+    allTools.some((t) => t.name === name) ||
+    typeof legacyTools[name] === 'function';
+
   return {
-    ledger: typeof tools.append_ledger === 'function',
-    agentBus: typeof tools.link_send === 'function',
+    ledger: hasTool('append_ledger'),
+    agentBus: hasTool('link_send'),
   };
 };
 

@@ -8,12 +8,12 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getAgentDir } from '@mariozechner/pi-coding-agent';
-import type { Model } from '@mariozechner/pi-ai';
+import { getAgentDir } from '@earendil-works/pi-coding-agent';
+import type { Model } from '@earendil-works/pi-ai';
 import type {
   ExtensionAPI,
   ExtensionContext,
-} from '@mariozechner/pi-coding-agent';
+} from '@earendil-works/pi-coding-agent';
 import type { RouterProfile, RouterConfig } from './types';
 import { parseCanonicalModelRef } from './config';
 
